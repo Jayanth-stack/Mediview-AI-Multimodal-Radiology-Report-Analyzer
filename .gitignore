@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+
+# Env & OS
+.env
+.env.local
+.DS_Store
+
+# Misc
+dist/
+coverage/
+
