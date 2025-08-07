@@ -2,6 +2,13 @@
 
 Production-ready scaffold for a multimodal clinical imaging assistant. Backed by FastAPI + PyTorch/Transformers, PostgreSQL, S3-compatible object storage, and a Next.js + Tailwind front-end. Ships with Docker Compose and baseline Kubernetes manifests (coming next step).
 
+### Phase 1 Deliverable (Completed)
+- Secure upload flow using presigned URLs for object storage (MinIO/S3)
+- Direct client upload to MinIO (no backend proxying of file bytes)
+- Async analysis job orchestration (enqueue job, process in background)
+- Job status polling endpoint to track progress until completion
+- ML is intentionally stubbed; the goal here is a reliable end-to-end data and job pipeline
+
 ### Features in this scaffold
 - Backend FastAPI with modular routers for: health, unified analyze endpoint (image + text), and stubs for VQA, DocQA, Summarization
 - Hugging Face integration layer with lazy pipelines (works offline by stubbing until models configured)
@@ -44,5 +51,11 @@ Populate model names/tokens in `.env` to enable real inference via Hugging Face:
 
 ### Notes
 - This scaffold avoids heavyweight model loads until you set envs. It will return deterministic stubbed outputs otherwise, so the UI and pipeline wiring can be built and tested first.
+
+
+### Roadmap
+- Phase 2: Real model integrations (HF/torch) for classification/segmentation, VQA/DocQA, summarization; streaming job progress via SSE/WebSocket
+- Phase 3: Study viewer overlays, feedback/annotation, audit logging, auth/roles
+- Phase 4: GPU model service, caching, observability, and evaluation gates
 
 
