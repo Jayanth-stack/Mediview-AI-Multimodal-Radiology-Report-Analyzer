@@ -11,6 +11,10 @@ class Study(Base):
     patient_id: Mapped[str] = mapped_column(String(64), index=True)
     modality: Mapped[str] = mapped_column(String(32))
     image_s3_key: Mapped[str] = mapped_column(String(256))
+    source : Mapped[str] = mapped_column(String(128), default = 'upload')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    patient_context : Mapped[str] = mapped_column(String(4000), nullable = True)
+
 
     reports: Mapped[list["Report"]] = relationship("Report", back_populates="study")
     findings: Mapped[list["Finding"]] = relationship("Finding", back_populates="study")
@@ -22,6 +26,7 @@ class Report(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     study_id: Mapped[int] = mapped_column(ForeignKey("studies.id"))
     text: Mapped[str] = mapped_column(String(4000))
+    summary_model : Mapped[str] = mapped_column(String(128), nullable = True)
 
     study: Mapped["Study"] = relationship("Study", back_populates="reports")
 
@@ -33,6 +38,8 @@ class Finding(Base):
     study_id: Mapped[int] = mapped_column(ForeignKey("studies.id"))
     label: Mapped[str] = mapped_column(String(128))
     confidence: Mapped[float] = mapped_column(Float)
+    model_name: Mapped[str] = mapped_column(String(128), nullable = True)
+    model_version: Mapped[str] = mapped_column(String(128), nullable = True)
 
     study: Mapped["Study"] = relationship("Study", back_populates="findings")
 
