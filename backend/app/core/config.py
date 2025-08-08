@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = "minioadmin"
     S3_BUCKET: str = "mediview"
     S3_SECURE: bool = False
+    PUBLIC_S3_ENDPOINT_URL: str = "http://localhost:9000"
 
     HF_API_TOKEN: str | None = None
     HF_IMG_CLS_MODEL: str | None = None

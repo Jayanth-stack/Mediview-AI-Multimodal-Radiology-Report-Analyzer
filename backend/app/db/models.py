@@ -1,6 +1,7 @@
-from sqlalchemy import String, Integer, Float, ForeignKey
+from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
+import enum
 
 
 class Study(Base):
@@ -34,4 +35,23 @@ class Finding(Base):
     confidence: Mapped[float] = mapped_column(Float)
 
     study: Mapped["Study"] = relationship("Study", back_populates="findings")
+
+
+class JobStatusEnum(str, enum.Enum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    type: Mapped[str] = mapped_column(String(32), default="analyze")
+    status: Mapped[str] = mapped_column(String(16), default=JobStatusEnum.queued.value)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    s3_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
 

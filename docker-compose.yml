@@ -62,6 +62,8 @@ services:
       HF_DQA_MODEL: ${HF_DQA_MODEL}
       HF_SUMM_MODEL: ${HF_SUMM_MODEL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
 
   frontend:
     build:
@@ -75,6 +77,26 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: celery -A app.tasks.celery_app.celery_app worker -Q analyze -l INFO
 
 volumes:
   db_data:

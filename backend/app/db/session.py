@@ -21,3 +21,15 @@ def init_engine_and_create_all() -> None:
         Base.metadata.create_all(bind=engine)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+def _ensure_engine() -> None:
+    global engine, SessionLocal
+    if engine is None:
+        engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_session():
+    _ensure_engine()
+    return SessionLocal()
+

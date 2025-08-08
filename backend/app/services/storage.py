@@ -24,6 +24,26 @@ class S3Storage:
         self._client.put_object(Bucket=self._bucket, Key=key, Body=data, ContentType=content_type)
         return f"{self._bucket}/{key}"
 
+    def generate_presigned_put(self, key: str, content_type: str, expires_seconds: int = 3600) -> str:
+        return self._client.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
+            ExpiresIn=expires_seconds,
+        )
+
+    def generate_presigned_post(
+        self, key: str, content_type: str, expires_seconds: int = 3600, max_size_mb: int = 50
+    ) -> dict:
+        conditions = [["content-length-range", 1, max_size_mb * 1024 * 1024], {"Content-Type": content_type}]
+        fields = {"Content-Type": content_type}
+        return self._client.generate_presigned_post(
+            Bucket=self._bucket,
+            Key=key,
+            Fields=fields,
+            Conditions=conditions,
+            ExpiresIn=expires_seconds,
+        )
+
 
 _s3_singleton: Optional[S3Storage] = None
 
