@@ -1,7 +1,8 @@
-from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON
+from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
 import enum
+from datetime import datetime
 
 
 class Study(Base):
@@ -40,6 +41,7 @@ class Finding(Base):
     confidence: Mapped[float] = mapped_column(Float)
     model_name: Mapped[str] = mapped_column(String(128), nullable = True)
     model_version: Mapped[str] = mapped_column(String(128), nullable = True)
+    extra: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     study: Mapped["Study"] = relationship("Study", back_populates="findings")
 

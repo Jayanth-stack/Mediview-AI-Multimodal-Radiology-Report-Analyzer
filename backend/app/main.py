@@ -12,6 +12,8 @@ from app.api.routes.analyze_job import router as analyze_job_router
 from app.schemas.entities import AnalysisResponse
 from app.services.hf import get_hf_service
 from app.db.session import init_engine_and_create_all
+import subprocess
+import os
 
 
 def create_app() -> FastAPI:
@@ -37,6 +39,21 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _on_startup() -> None:
+        # Run Alembic migrations first (if alembic configured); ignore failures in dev
+        try:
+            subprocess.run(
+                [
+                    "alembic",
+                    "upgrade",
+                    "head",
+                ],
+                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except Exception:
+            pass
         init_engine_and_create_all()
 
     # routes are registered via routers
