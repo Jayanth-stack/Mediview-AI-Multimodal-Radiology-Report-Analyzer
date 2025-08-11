@@ -1,7 +1,7 @@
 """
 phase3: ensure new columns exist after initial table creation
 
-Revision ID: 0002_add_columns_after_table_create
+Revision ID: 0002_phase3_cols
 Revises: 0001_phase3_fields
 Create Date: 2025-08-11 00:10:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0002_add_columns_after_table_create"
+revision = "0002_phase3_cols"
 down_revision = "0001_phase3_fields"
 branch_labels = None
 depends_on = None
