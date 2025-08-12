@@ -18,10 +18,21 @@ Production-ready scaffold for a multimodal clinical imaging assistant. Backed by
 - Frontend updated to: presign → direct upload → start job → poll status
 - `Job` table persisted in Postgres; stubs simulate progress/results
 
+### Phase 3 – PR-2 (Completed)
+- Introduced a pluggable Pipeline with stages (`classify`, `summarize`, `persist`)
+- Celery `analyze_task` now:
+  - Creates a `Study` row for each upload
+  - Pulls image bytes from MinIO via `get_object_bytes`
+  - Runs stages and persists `Finding` rows (and `Report` when text/summary present)
+  - Updates `job.result` to include `study_id`, `num_findings`, `s3_key`
+- `HFService` extended with `classify_bytes` and `summarize_text` (graceful stubs if models unset)
+
+Purpose of this step: decouple the analysis workflow into composable stages, make background jobs testable and observable, and persist real entities (`Study`, `Finding`, `Report`) to Postgres so later features (overlays, evaluation, re-analysis) have a solid data backbone.
+
 ### Features in this scaffold
 - Backend FastAPI with modular routers for: health, analyze endpoints (legacy single-call and async job), and stubs for VQA, DocQA, Summarization
 - Hugging Face integration layer with lazy pipelines (works offline by stubbing until models configured)
-- SQLAlchemy models for `Study`, `Report`, `Finding`, `Job` with auto `create_all` on startup
+- SQLAlchemy models for `Study`, `Report`, `Finding`, `Job` with migrations and persistence via the pipeline
 - S3 (MinIO) storage wrapper for image/report artifacts + presigned uploads
 - Redis + Celery worker for async jobs
 - Next.js (App Router) + Tailwind UI starter
@@ -58,6 +69,21 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --app-dir backend
 - `POST /api/analyze/start` – enqueue analysis job from uploaded S3 key
 - `GET /api/jobs/{job_id}` – poll job status and result
 
+Result payload (now includes persisted context):
+```json
+{
+  "id": "<job_id>",
+  "status": "completed",
+  "progress": 100,
+  "error": null,
+  "result": {
+    "study_id": 123,
+    "num_findings": 1,
+    "s3_key": "uploads/<key>"
+  }
+}
+```
+
 ### Configure models (optional now)
 Populate model names/tokens in `.env` to enable real inference via Hugging Face:
 - `HF_API_TOKEN`, `HF_IMG_CLS_MODEL`, `HF_IMG_SEG_MODEL`, `HF_VQA_MODEL`, `HF_DQA_MODEL`, `HF_SUMM_MODEL`
@@ -65,7 +91,7 @@ Populate model names/tokens in `.env` to enable real inference via Hugging Face:
 ### Notes
 - This scaffold avoids heavyweight model loads until you set envs. It will return deterministic stubbed outputs otherwise, so the UI and pipeline wiring can be built and tested first.
 
-### Verify Phase 2 (manual test)
+### Verify PR-2 (manual test)
 1) Presign
 ```
 curl -s -X POST http://localhost:8000/api/uploads/presign \
@@ -86,10 +112,11 @@ curl -s -X POST http://localhost:8000/api/analyze/start \
 ```
 curl -s http://localhost:8000/api/jobs/<job_id>
 ```
+Expect `result.study_id` and `result.num_findings` to be present. Rows should exist in `studies` (and `findings` if any).
 
 
 ### Roadmap
-- Phase 3: Real model integrations (HF/torch) for classification/segmentation, VQA/DocQA, summarization; streaming job progress via SSE/WebSocket; persist findings
+- Phase 3: Real model integrations (HF/torch) for classification/segmentation, VQA/DocQA, summarization; streaming job progress via SSE/WebSocket; auth & logging
 - Phase 4: Study viewer overlays, feedback/annotation, audit logging, auth/roles
 - Phase 5: GPU model service, caching, observability, and evaluation gates
 

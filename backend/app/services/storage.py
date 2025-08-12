@@ -44,6 +44,16 @@ class S3Storage:
             ExpiresIn=expires_seconds,
         )
 
+    def get_object_bytes(self, key: str) -> bytes:
+        obj = self._client.get_object(Bucket=self._bucket, Key=key)
+        try:
+            return obj["Body"].read()
+        finally:
+            try:
+                obj["Body"].close()
+            except Exception:
+                pass
+
 
 _s3_singleton: Optional[S3Storage] = None
 

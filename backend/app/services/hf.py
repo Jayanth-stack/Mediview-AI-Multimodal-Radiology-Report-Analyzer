@@ -82,6 +82,46 @@ class HFService:
         final_summary = summary_text or "Automated analysis complete. Review findings and images."
         return AnalysisResponse(summary=final_summary, findings=findings, notes=None)
 
+    # PR-2: lightweight helpers usable from background tasks/pipelines
+    def classify_bytes(self, image_bytes: bytes) -> list[Finding]:
+        try:
+            pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        except Exception:
+            return []
+
+        if not self._enabled:
+            return [Finding(label="possible_abnormality", confidence=0.42)]
+
+        results: list[Finding] = []
+        cls_pipe = self._load_pipeline("image-classification", settings.HF_IMG_CLS_MODEL)
+        if cls_pipe is not None:
+            try:
+                outputs = cls_pipe(pil_image)  # type: ignore[call-arg]
+                if isinstance(outputs, list):
+                    for item in outputs[:3]:
+                        label = item.get("label", "unknown")
+                        score = float(item.get("score", 0.0))
+                        results.append(Finding(label=label, confidence=score))
+            except Exception:
+                pass
+        return results
+
+    def summarize_text(self, text: str) -> str:
+        if not text:
+            return ""
+        if not self._enabled:
+            return ""
+        summ_pipe = self._load_pipeline("summarization", settings.HF_SUMM_MODEL)
+        if summ_pipe is None:
+            return ""
+        try:
+            out = summ_pipe(text[:2000])
+            if isinstance(out, list) and out:
+                return out[0].get("summary_text", "")
+        except Exception:
+            return ""
+        return ""
+
 
 _hf_singleton: Optional[HFService] = None
 
