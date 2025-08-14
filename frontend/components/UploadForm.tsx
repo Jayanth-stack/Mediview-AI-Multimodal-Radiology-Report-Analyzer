@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
@@ -11,6 +11,8 @@ export default function UploadForm() {
   const [result, setResult] = useState<any>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const esRef = useRef<EventSource | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +22,8 @@ export default function UploadForm() {
       setError("Select an image");
       return;
     }
-    setLoading(true);
+      setLoading(true);
+      setProgress(0);
     try {
       // 1) Presign
       const presign = await fetch(`${backendUrl}/api/uploads/presign`, {
@@ -47,21 +50,49 @@ export default function UploadForm() {
       });
       if (!startResp.ok) throw new Error(`start HTTP ${startResp.status}`);
       const startData = await startResp.json();
-      setJobId(startData.job_id);
-
-      // 4) Poll job until complete
-      let attempts = 0;
-      let final: any = null;
-      while (attempts < 60) {
-        const st = await fetch(`${backendUrl}/api/jobs/${startData.job_id}`);
-        const sj = await st.json();
-        if (sj.status === "completed") { final = sj; break; }
-        if (sj.status === "failed") { throw new Error(sj.error || "job failed"); }
-        await new Promise(r => setTimeout(r, 1000));
-        attempts += 1;
+      const jid = startData.job_id;
+      setJobId(jid);
+      // 4) Prefer SSE for live progress
+      try {
+        const es = new EventSource(`${backendUrl}/api/jobs/${jid}/events`);
+        esRef.current = es;
+        es.addEventListener("progress", (ev: MessageEvent) => {
+          const data = JSON.parse((ev as MessageEvent).data);
+          setProgress(data.progress || 0);
+          if (data.status === "completed") {
+            setResult(data);
+            es.close();
+            esRef.current = null;
+          } else if (data.status === "failed") {
+            setError(data.error || "job failed");
+            es.close();
+            esRef.current = null;
+          }
+        });
+        es.onerror = () => {
+          // Fallback to polling on SSE error
+          es.close();
+          esRef.current = null;
+        };
+      } catch {
+        // ignore, fallback handled below
       }
-      if (!final) throw new Error("timeout waiting for job");
-      setResult(final);
+      // Fallback polling if SSE didn't attach
+      if (!esRef.current) {
+        let attempts = 0;
+        let final: any = null;
+        while (attempts < 60) {
+          const st = await fetch(`${backendUrl}/api/jobs/${jid}`);
+          const sj = await st.json();
+          setProgress(sj.progress || 0);
+          if (sj.status === "completed") { final = sj; break; }
+          if (sj.status === "failed") { throw new Error(sj.error || "job failed"); }
+          await new Promise(r => setTimeout(r, 1000));
+          attempts += 1;
+        }
+        if (!final) throw new Error("timeout waiting for job");
+        setResult(final);
+      }
     } catch (err: any) {
       setError(err?.message || "Request failed");
     } finally {
@@ -97,7 +128,7 @@ export default function UploadForm() {
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
       {jobId && !result && (
-        <p className="text-sm text-gray-600">Job: {jobId} (running...)</p>
+        <p className="text-sm text-gray-600">Job: {jobId} (running... {progress}%)</p>
       )}
       {result && (
         <pre className="text-xs bg-white border rounded p-3 overflow-auto max-h-96">
