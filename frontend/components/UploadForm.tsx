@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import StudyViewer from "./StudyViewer";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
@@ -12,6 +13,7 @@ export default function UploadForm() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<number>(0);
+  const [study, setStudy] = useState<any>(null);
   const esRef = useRef<EventSource | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -100,6 +102,21 @@ export default function UploadForm() {
     }
   };
 
+  useEffect(() => {
+    if (result?.status === "completed") {
+      (async () => {
+        try {
+          const studyResp = await fetch(`${backendUrl}/api/studies/${result.result.study_id}`);
+          if (!studyResp.ok) throw new Error("fetch study failed");
+          const studyData = await studyResp.json();
+          setStudy(studyData);
+        } catch (err: any) {
+          setError(err.message || "Failed to load study");
+        }
+      })();
+    }
+  }, [result]);
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
@@ -135,6 +152,7 @@ export default function UploadForm() {
 {JSON.stringify(result, null, 2)}
         </pre>
       )}
+      {study && <StudyViewer imageSrc={study.image_url} findings={study.findings} />}
     </form>
   );
 }
