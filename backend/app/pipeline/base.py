@@ -22,8 +22,3 @@ class Pipeline:
             progress(min(95, int(index * 95 / num_stages)), f"stage:{index}:done")
         return ctx
 
-from typing import Protocol, Callable, Any
-
-ProgressFn = Callable[[int, str], None]
-
-    
