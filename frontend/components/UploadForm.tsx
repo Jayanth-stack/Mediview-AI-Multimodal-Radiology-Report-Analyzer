@@ -5,7 +5,11 @@ import StudyViewer from "./StudyViewer";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
-export default function UploadForm() {
+interface UploadFormProps {
+  onAnalysisStart: (imageUrl: string, reportText?: string) => void;
+}
+
+export default function UploadForm({ onAnalysisStart }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,8 +28,12 @@ export default function UploadForm() {
       setError("Select an image");
       return;
     }
-      setLoading(true);
-      setProgress(0);
+    
+    const imageUrl = URL.createObjectURL(file);
+    onAnalysisStart(imageUrl, report);
+
+    setLoading(true);
+    setProgress(0);
     try {
       // 1) Presign
       const presign = await fetch(`${backendUrl}/api/uploads/presign`, {
