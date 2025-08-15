@@ -1,6 +1,18 @@
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function FindingsDrawer({ isOpen, findings, onHover }) {
+interface Finding {
+  id: number;
+  label: string;
+  confidence: number;
+}
+
+interface FindingsDrawerProps {
+  isOpen: boolean;
+  findings: Finding[];
+  onHover: (id: number, isHovering: boolean) => void;
+}
+
+export default function FindingsDrawer({ isOpen, findings, onHover }: FindingsDrawerProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -12,9 +24,9 @@ export default function FindingsDrawer({ isOpen, findings, onHover }) {
           className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl overflow-auto"
         >
           <ul>
-            {findings.map((f, i) => (
+            {findings.map((f) => (
               <motion.li
-                key={i}
+                key={f.id}
                 whileHover={{ scale: 1.05, backgroundColor: "#f0f0f0" }}
                 onHoverStart={() => onHover(f.id, true)}  // Pulse box on canvas
                 onHoverEnd={() => onHover(f.id, false)}

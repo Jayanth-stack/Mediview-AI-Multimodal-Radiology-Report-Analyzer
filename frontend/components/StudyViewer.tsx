@@ -2,10 +2,27 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import FindingsDrawer from "./FindingsDrawer";
 
-export default function StudyViewer({ imageSrc, findings }) {
-  const [hoveredId, setHoveredId] = useState(null);
+interface Finding {
+  id: number;
+  label: string;
+  confidence: number;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
 
-  const onHover = (id, isHovering) => {
+interface StudyViewerProps {
+  imageSrc: string;
+  findings: Finding[];
+}
+
+export default function StudyViewer({ imageSrc, findings }: StudyViewerProps) {
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  const onHover = (id: number, isHovering: boolean) => {
     setHoveredId(isHovering ? id : null);
   };
 
