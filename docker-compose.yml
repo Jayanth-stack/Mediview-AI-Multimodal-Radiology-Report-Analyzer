@@ -71,7 +71,7 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://backend:8000
 
   redis:
     image: redis:7-alpine
