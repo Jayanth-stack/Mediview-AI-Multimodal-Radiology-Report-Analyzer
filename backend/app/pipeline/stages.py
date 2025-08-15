@@ -2,31 +2,31 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.services.hf import HFService
+from app.services.gemini import GeminiService
 from app.db.models import Study, Report, Finding
 
 
 class ClassifyStage:
-    def __init__(self, hf_service: HFService) -> None:
-        self._hf = hf_service
+    def __init__(self, gemini_service: GeminiService) -> None:
+        self._gemini = gemini_service
 
     def run(self, ctx: dict[str, Any], progress: Callable[[int, str], None]) -> None:
         image_bytes: bytes = ctx["image_bytes"]
-        findings = self._hf.classify_bytes(image_bytes)
+        findings = self._gemini.classify_bytes(image_bytes)
         ctx["findings"] = findings
         progress(30, "classified")
 
 
 class SummarizeStage:
-    def __init__(self, hf_service: HFService) -> None:
-        self._hf = hf_service
+    def __init__(self, gemini_service: GeminiService) -> None:
+        self._gemini = gemini_service
 
     def run(self, ctx: dict[str, Any], progress: Callable[[int, str], None]) -> None:
         report_text: str = ctx.get("report_text") or ""
         if not report_text:
             ctx["summary"] = ""
             return
-        ctx["summary"] = self._hf.summarize_text(report_text) or ""
+        ctx["summary"] = self._gemini.summarize_text(report_text) or ""
         progress(60, "summarized")
 
 

@@ -9,8 +9,9 @@ from app.api.routes.analyze import router as analyze_router
 from app.api.routes.uploads import router as uploads_router
 from app.api.routes.jobs import router as jobs_router
 from app.api.routes.analyze_job import router as analyze_job_router
+from app.api.routes.studies import router as studies_router
 from app.schemas.entities import AnalysisResponse
-from app.services.hf import get_hf_service
+from app.services.gemini import get_gemini_service
 from app.db.session import init_engine_and_create_all
 import subprocess
 import os
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(uploads_router)
     app.include_router(jobs_router)
     app.include_router(analyze_job_router)
+    app.include_router(studies_router)
 
     @app.on_event("startup")
     def _on_startup() -> None:

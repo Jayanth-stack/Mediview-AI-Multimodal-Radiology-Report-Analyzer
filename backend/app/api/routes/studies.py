@@ -33,5 +33,5 @@ def get_study(study_id: int, session=Depends(get_session), s3=Depends(get_s3_sto
         # Stub bbox for demo
         bbox = Bbox(x=100, y=100, width=200, height=150)
         out_findings.append(FindingOut(id=f.id, label=f.label, confidence=f.confidence, bbox=bbox))
-    image_url = s3.generate_presigned_url("get_object", Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, ExpiresIn=3600)
+    image_url = s3._client.generate_presigned_url("get_object", Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, ExpiresIn=3600)
     return StudyOut(image_url=image_url, findings=out_findings)

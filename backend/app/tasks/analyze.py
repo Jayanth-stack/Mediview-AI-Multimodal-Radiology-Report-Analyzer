@@ -7,7 +7,7 @@ from app.db.session import get_session
 from app.db.models import Job, Study
 from app.pipeline.base import Pipeline
 from app.pipeline.stages import ClassifyStage, SummarizeStage, PersistStage
-from app.services.hf import get_hf_service
+from app.services.gemini import get_gemini_service
 from app.services.storage import get_s3_storage
 
 
@@ -39,8 +39,8 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
             "report_text": report_text or "",
         }
 
-        hf = get_hf_service()
-        pipeline = Pipeline([ClassifyStage(hf), SummarizeStage(hf), PersistStage(get_session)])
+        gemini = get_gemini_service()
+        pipeline = Pipeline([ClassifyStage(gemini), SummarizeStage(gemini), PersistStage(get_session)])
 
         def progress(p: int, _msg: str) -> None:
             job.status = "running"

@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
+import FindingsDrawer from "./FindingsDrawer";
 
 export default function StudyViewer({ imageSrc, findings }) {
   const [hoveredId, setHoveredId] = useState(null);

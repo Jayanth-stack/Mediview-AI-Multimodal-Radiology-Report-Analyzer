@@ -16,12 +16,9 @@ class Settings(BaseSettings):
     S3_SECURE: bool = False
     PUBLIC_S3_ENDPOINT_URL: str = "http://localhost:9000"
 
-    HF_API_TOKEN: str | None = None
-    HF_IMG_CLS_MODEL: str | None = None
-    HF_IMG_SEG_MODEL: str | None = None
-    HF_VQA_MODEL: str | None = None
-    HF_DQA_MODEL: str | None = None
-    HF_SUMM_MODEL: str | None = None
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_VISION_MODEL: str = "gemini-1.5-flash"
 
     class Config:
         env_file = ".env"
