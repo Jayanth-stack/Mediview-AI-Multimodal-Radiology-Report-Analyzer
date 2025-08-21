@@ -91,6 +91,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      GEMINI_VISION_MODEL: ${GEMINI_VISION_MODEL}
     command: celery -A app.tasks.celery_app.celery_app worker -Q analyze -l INFO
 
 volumes:

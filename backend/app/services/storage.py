@@ -24,6 +24,14 @@ class S3Storage:
         self._client.put_object(Bucket=self._bucket, Key=key, Body=data, ContentType=content_type)
         return f"{self._bucket}/{key}"
 
+    def get_bytes(self, key: str) -> bytes:
+        obj = self._client.get_object(Bucket=self._bucket, Key=key)
+        return obj["Body"].read()
+
+    # Backwards-compatible alias used by tasks
+    def get_object_bytes(self, key: str) -> bytes:
+        return self.get_bytes(key)
+
     def generate_presigned_put(self, key: str, content_type: str, expires_seconds: int = 3600) -> str:
         return self._client.generate_presigned_url(
             ClientMethod="put_object",
