@@ -1,75 +1,81 @@
 ## MediViewAI – Multimodal Radiology & Report Analyzer
 
-Production-ready scaffold for a multimodal clinical imaging assistant. Backed by FastAPI + PyTorch/Transformers, PostgreSQL, S3-compatible object storage, and a Next.js + Tailwind front-end. Ships with Docker Compose and baseline Kubernetes manifests (coming next step).
+[![MediViewAI Landing Page](assets/landing-page.png)](assets/landing-page.png)
 
-### Phase 1 Deliverable (Completed)
-- Secure upload flow using presigned URLs for object storage (MinIO/S3)
-- Direct client upload to MinIO (no backend proxying of file bytes)
-- Async analysis job orchestration (enqueue job, process in background)
-- Job status polling endpoint to track progress until completion
-- ML is intentionally stubbed; the goal here is a reliable end-to-end data and job pipeline
+Production-ready scaffold for a multimodal clinical imaging assistant. Backed by FastAPI, PostgreSQL, S3-compatible object storage, and a Next.js front-end. It ships with Docker Compose for easy setup.
 
-### Phase 2 Deliverable (Completed)
-- Added Redis + Celery worker for background jobs
-- New endpoints:
-  - `POST /api/uploads/presign` – presigned URL for direct client upload
-  - `POST /api/analyze/start` – enqueue analysis job, returns `job_id`
-  - `GET /api/jobs/{job_id}` – poll job status/result
-- Frontend updated to: presign → direct upload → start job → poll status
-- `Job` table persisted in Postgres; stubs simulate progress/results
+### Features
+- **Secure File Uploads**: Utilizes presigned URLs for direct client-to-S3/MinIO uploads, ensuring file bytes don't pass through the backend.
+- **Asynchronous Analysis**: Employs Celery and Redis for background job processing, allowing for non-blocking analysis tasks.
+- **Pluggable Pipeline**: A decoupled analysis workflow with composable stages (e.g., `classify`, `summarize`, `persist`).
+- **Database Persistence**: Uses SQLAlchemy and Postgres to store information about studies, findings, reports, and jobs.
+- **Containerized**: Fully containerized with Docker for both development and production environments.
+- **Modern Frontend**: A reactive user interface built with Next.js and Tailwind CSS.
+- **ML Integration Layer**: A service layer for integrating machine learning models from providers like Hugging Face and Google Gemini.
 
-### Phase 3 – PR-2 (Completed)
-- Introduced a pluggable Pipeline with stages (`classify`, `summarize`, `persist`)
-- Celery `analyze_task` now:
-  - Creates a `Study` row for each upload
-  - Pulls image bytes from MinIO via `get_object_bytes`
-  - Runs stages and persists `Finding` rows (and `Report` when text/summary present)
-  - Updates `job.result` to include `study_id`, `num_findings`, `s3_key`
-- `HFService` extended with `classify_bytes` and `summarize_text` (graceful stubs if models unset)
+### Tech Stack
 
-Purpose of this step: decouple the analysis workflow into composable stages, make background jobs testable and observable, and persist real entities (`Study`, `Finding`, `Report`) to Postgres so later features (overlays, evaluation, re-analysis) have a solid data backbone.
+- **Backend**: FastAPI, Python 3.11, Celery
+- **Database**: PostgreSQL
+- **Cache & Message Broker**: Redis
+- **Object Storage**: MinIO (S3 Compatible)
+- **Frontend**: Next.js, React, Tailwind CSS
+- **Containerization**: Docker, Docker Compose
 
-### Features in this scaffold
-- Backend FastAPI with modular routers for: health, analyze endpoints (legacy single-call and async job), and stubs for VQA, DocQA, Summarization
-- Hugging Face integration layer with lazy pipelines (works offline by stubbing until models configured)
-- SQLAlchemy models for `Study`, `Report`, `Finding`, `Job` with migrations and persistence via the pipeline
-- S3 (MinIO) storage wrapper for image/report artifacts + presigned uploads
-- Redis + Celery worker for async jobs
-- Next.js (App Router) + Tailwind UI starter
-- Dockerfiles + docker-compose (Postgres + MinIO + app services)
-- `.env.example` to configure everything
+### Quick Start
 
-### Quick start
-1) Copy envs
-```bash
-cp .env.example .env
+1.  **Clone the repository**
+    ```bash
+    git clone <repository-url>
+    cd MediViewAI
+    ```
+
+2.  **Set up environment variables**
+    Copy the example environment file and customize it as needed.
+    ```bash
+    cp .env.example .env
+    ```
+
+3.  **Start the application stack**
+    ```bash
+    docker compose up -d --build
+    ```
+
+4.  **Access the services**
+    - **Frontend**: [http://localhost:3000](http://localhost:3000)
+    - **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+    - **MinIO Console**: [http://localhost:9001](http://localhost:9001) (Credentials are in your `.env` file)
+
+### Project Structure
+```
+.
+├── backend/
+│   ├── app/
+│   │   ├── api/         # FastAPI routers
+│   │   ├── core/        # Configuration
+│   │   ├── db/          # Database models and session management
+│   │   ├── pipeline/    # Analysis pipeline stages
+│   │   ├── schemas/     # Pydantic schemas
+│   │   ├── services/    # Business logic for external services (S3, ML models)
+│   │   └── tasks/       # Celery tasks
+│   ├── alembic/         # Database migrations
+│   └── Dockerfile
+├── frontend/
+│   ├── app/             # Next.js app router pages
+│   ├── components/      # React components
+│   └── Dockerfile
+├── docker-compose.yml   # Docker services definition
+└── README.md
 ```
 
-2) Start stack
-```bash
-docker compose up -d --build
-```
+### API Endpoints
 
-3) Open services
-- Backend: http://localhost:8000/docs
-- Frontend: http://localhost:3000
-- MinIO Console: http://localhost:9001 (user: `MINIO_ROOT_USER`, pass: `MINIO_ROOT_PASSWORD`)
+-   `GET /health`: Health check.
+-   `POST /api/uploads/presign`: Get a presigned URL for file uploads.
+-   `POST /api/analyze/start`: Start an analysis job for an uploaded file.
+-   `GET /api/jobs/{job_id}`: Poll for job status and results.
 
-### Backend local dev (without Docker)
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --app-dir backend
-```
-
-### Endpoints
-- `GET /health` – readiness
-- `POST /api/analyze` – legacy single-call analyze (multipart)
-- `POST /api/uploads/presign` – presigned PUT/POST payload for direct S3/MinIO upload
-- `POST /api/analyze/start` – enqueue analysis job from uploaded S3 key
-- `GET /api/jobs/{job_id}` – poll job status and result
-
-Result payload (now includes persisted context):
+An example job result payload:
 ```json
 {
   "id": "<job_id>",
@@ -84,61 +90,17 @@ Result payload (now includes persisted context):
 }
 ```
 
-### Configure models (optional now)
-Populate model names/tokens in `.env` to enable real inference via Hugging Face:
-- `HF_API_TOKEN`, `HF_IMG_CLS_MODEL`, `HF_IMG_SEG_MODEL`, `HF_VQA_MODEL`, `HF_DQA_MODEL`, `HF_SUMM_MODEL`
+### Configuration
 
-### Notes
-- This scaffold avoids heavyweight model loads until you set envs. It will return deterministic stubbed outputs otherwise, so the UI and pipeline wiring can be built and tested first.
+To enable real inference with machine learning models, populate the model names and API tokens in your `.env` file. The application is designed to work with stubbed outputs if these are not configured.
 
-### Verify PR-2 (manual test)
-1) Presign
-```
-curl -s -X POST http://localhost:8000/api/uploads/presign \
-  -H 'Content-Type: application/json' \
-  -d '{"filename":"test.png","content_type":"image/png","use_post":false}'
-```
-2) Upload (PUT the file to returned URL)
-```
-curl -X PUT -H 'Content-Type: image/png' --data-binary @/path/to/test.png "<presigned_url>"
-```
-3) Start job
-```
-curl -s -X POST http://localhost:8000/api/analyze/start \
-  -H 'Content-Type: application/json' \
-  -d '{"s3_key":"<key_from_presign>","report_text":"optional"}'
-```
-4) Poll status
-```
-curl -s http://localhost:8000/api/jobs/<job_id>
-```
-Expect `result.study_id` and `result.num_findings` to be present. Rows should exist in `studies` (and `findings` if any).
-
+-   `HF_API_TOKEN`, `HF_IMG_CLS_MODEL`, `HF_SUMM_MODEL`, etc.
+-   `GEMINI_API_KEY`
 
 ### Roadmap
-- Phase 3: Real model integrations (HF/torch) for classification/segmentation, VQA/DocQA, summarization; streaming job progress via SSE/WebSocket; auth & logging
-- Phase 4: Study viewer overlays, feedback/annotation, audit logging, auth/roles
-- Phase 5: GPU model service, caching, observability, and evaluation gates
 
-### Next Phase Plan (Phase 3)
-- Models
-  - Enable real HF pipelines via envs, add CPU-safe defaults
-  - Implement image classification + (optional) basic detection/segmentation
-- Pipeline
-  - Refactor analyze task to use a pluggable Pipeline with stages
-  - Persist `Finding` rows with model names/versions and confidences
-- Streaming progress
-  - SSE endpoint `/api/jobs/{id}/events` to stream step/progress
-  - Frontend subscribe and live-update job state
-- Safety & logging
-  - Request ID middleware + structured logs
-  - Mask PHI in logs, opt-in verbose traces by env
-
-### Phase 3 To-Do (brief)
-- [ ] Implement `Pipeline` and first two stages (classify, summarize)
-- [ ] Wire HF models via envs; add graceful fallback to stubs
-- [ ] Persist findings to DB and return in job result
-- [ ] Add SSE events for job progress; frontend consumption
-- [ ] Basic API key auth for job endpoints
+-   **Phase 3**: Real model integrations; streaming job progress via WebSockets/SSE; authentication and logging.
+-   **Phase 4**: Study viewer with finding overlays; user feedback and annotation capabilities; audit logging and role-based access control.
+-   **Phase 5**: GPU-enabled model serving; caching strategies; enhanced observability and model evaluation gates.
 
 
