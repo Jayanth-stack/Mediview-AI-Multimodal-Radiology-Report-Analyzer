@@ -1,3 +1,62 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+
+from app.db.session import get_session
+from app.db.models import Study, Finding, Report
+
+
+router = APIRouter(prefix="/api/studies")
+
+
+@router.get("/{study_id}")
+def get_study(study_id: int) -> dict:
+    session = get_session()
+    try:
+        study = session.get(Study, study_id)
+        if not study:
+            raise HTTPException(status_code=404, detail="study not found")
+        findings = (
+            session.query(Finding)
+            .filter(Finding.study_id == study_id)
+            .order_by(Finding.id.asc())
+            .all()
+        )
+        reports = (
+            session.query(Report)
+            .filter(Report.study_id == study_id)
+            .order_by(Report.id.asc())
+            .all()
+        )
+        return {
+            "study": {
+                "id": study.id,
+                "patient_id": study.patient_id,
+                "modality": study.modality,
+                "image_s3_key": study.image_s3_key,
+                "created_at": study.created_at.isoformat() if hasattr(study, "created_at") and study.created_at else None,
+            },
+            "findings": [
+                {
+                    "id": f.id,
+                    "label": f.label,
+                    "confidence": f.confidence,
+                    "model_name": f.model_name,
+                    "model_version": f.model_version,
+                }
+                for f in findings
+            ],
+            "reports": [
+                {
+                    "id": r.id,
+                    "text": r.text,
+                    "summary_model": r.summary_model,
+                }
+                for r in reports
+            ],
+        }
+    finally:
+        session.close()
 from fastapi import APIRouter, Depends, HTTPException
 from app.db.session import get_session
 from app.db.models import Study, Finding

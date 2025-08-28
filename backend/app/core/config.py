@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "mediview"
     S3_SECURE: bool = False
     PUBLIC_S3_ENDPOINT_URL: str = "http://localhost:9000"
+    REDIS_URL: str = "redis://redis:6379/0"
 
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-1.5-flash"

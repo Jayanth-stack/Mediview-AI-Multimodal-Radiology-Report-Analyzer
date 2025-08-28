@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+import json
+import time
+import redis.asyncio as aioredis  # type: ignore
+from app.core.config import settings
 from fastapi import Request
 from sse_starlette.sse import EventSourceResponse
 import asyncio
@@ -38,6 +43,28 @@ def get_job(job_id: str) -> JobStatus:
         )
     finally:
         session.close()
+
+
+async def _sse_generator(job_id: str):
+    # Use Redis pubsub channel per job
+    redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    try:
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(f"jobs:{job_id}")
+        # send an initial ping
+        yield f"event: ping\ndata: {json.dumps({'ts': time.time()})}\n\n"
+        async for msg in pubsub.listen():
+            if msg.get("type") != "message":
+                continue
+            data = msg.get("data")
+            yield f"data: {data}\n\n"
+    finally:
+        await redis.close()
+
+
+@router.get("/{job_id}/events")
+async def job_events(job_id: str) -> StreamingResponse:
+    return StreamingResponse(_sse_generator(job_id), media_type="text/event-stream")
 
 
 @router.get("/{job_id}/events")

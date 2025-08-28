@@ -16,6 +16,7 @@ orjson==3.10.6
 celery==5.4.0
 redis==5.0.7
 google-generativeai==0.7.2
+redis[async]==5.0.7
 
 alembic==1.13.2
 sse-starlette==1.8.2
