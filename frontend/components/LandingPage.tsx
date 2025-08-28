@@ -1,7 +1,11 @@
 "use client";
 import { motion } from "framer-motion";
 
-export default function LandingPage() {
+interface LandingPageProps {
+  onStartAnalysis: () => void;
+}
+
+export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Hero Section */}
@@ -30,7 +34,10 @@ export default function LandingPage() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="flex flex-col sm:flex-row gap-4 justify-center"
             >
-              <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-glow transition-all duration-300 transform hover:scale-105">
+              <button
+                onClick={onStartAnalysis}
+                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-glow transition-all duration-300 transform hover:scale-105"
+              >
                 Start Analysis
               </button>
               <button className="px-8 py-4 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-all duration-300">

@@ -6,10 +6,10 @@ import StudyViewer from "./StudyViewer";
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 interface UploadFormProps {
-  onAnalysisStart: (imageUrl: string, reportText?: string) => void;
+  onAnalysisComplete: (data: any) => void;
 }
 
-export default function UploadForm({ onAnalysisStart }: UploadFormProps) {
+export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function UploadForm({ onAnalysisStart }: UploadFormProps) {
     }
     
     const imageUrl = URL.createObjectURL(file);
-    onAnalysisStart(imageUrl, report);
+    // onAnalysisStart(imageUrl, report); // This line is removed as per the new_code
 
     setLoading(true);
     setProgress(0);
@@ -118,6 +118,7 @@ export default function UploadForm({ onAnalysisStart }: UploadFormProps) {
           if (!studyResp.ok) throw new Error("fetch study failed");
           const studyData = await studyResp.json();
           setStudy(studyData);
+          onAnalysisComplete(studyData);
         } catch (err: any) {
           setError(err.message || "Failed to load study");
         }
@@ -125,43 +126,93 @@ export default function UploadForm({ onAnalysisStart }: UploadFormProps) {
     }
   }, [result]);
 
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-          className="block w-full text-sm"
-        />
-      </div>
-      <div>
-        <textarea
-          placeholder="Optional report text"
-          value={report}
-          onChange={(e) => setReport(e.target.value)}
-          className="w-full border rounded p-2 text-sm min-h-[100px]"
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={loading}
-        className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-      >
-        {loading ? "Analyzing..." : "Analyze"}
-      </button>
+  if (study) {
+    return null; // The parent component will now handle showing the StudyViewer
+  }
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      {jobId && !result && (
-        <p className="text-sm text-gray-600">Job: {jobId} (running... {progress}%)</p>
-      )}
-      {result && (
-        <pre className="text-xs bg-white border rounded p-3 overflow-auto max-h-96">
-{JSON.stringify(result, null, 2)}
-        </pre>
-      )}
-      {study && <StudyViewer imageSrc={study.image_url} findings={study.findings} />}
-    </form>
+  return (
+    <div className="max-w-xl mx-auto my-12 p-8 border rounded-xl shadow-soft bg-white">
+      <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">New Analysis</h2>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Upload Radiology Image
+          </label>
+          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md">
+            <div className="space-y-1 text-center">
+              <svg
+                className="mx-auto h-12 w-12 text-slate-400"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+                aria-hidden="true"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <div className="flex text-sm text-slate-600">
+                <label
+                  htmlFor="file-upload"
+                  className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                >
+                  <span>Upload a file</span>
+                  <input
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="sr-only"
+                  />
+                </label>
+                <p className="pl-1">or drag and drop</p>
+              </div>
+              <p className="text-xs text-slate-500">{file ? file.name : "PNG, JPG up to 10MB"}</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="report" className="block text-sm font-medium text-slate-700">
+            Optional Report Text
+          </label>
+          <div className="mt-1">
+            <textarea
+              id="report"
+              name="report"
+              rows={4}
+              placeholder="Paste the radiology report here..."
+              value={report}
+              onChange={(e) => setReport(e.target.value)}
+              className="w-full border-slate-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={loading || !file}
+          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+        >
+          {loading ? "Analyzing..." : "Analyze"}
+        </button>
+
+        {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+        {jobId && !result && (
+          <div className="w-full bg-slate-200 rounded-full h-2.5">
+            <div
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            ></div>
+            <p className="text-sm text-slate-600 text-center mt-2">
+              Job: {jobId.substring(0, 8)}... (running... {progress}%)
+            </p>
+          </div>
+        )}
+      </form>
+    </div>
   );
 }
 
