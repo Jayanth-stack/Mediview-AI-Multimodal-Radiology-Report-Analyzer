@@ -4,6 +4,7 @@ pydantic==2.7.4
 pydantic-settings==2.3.1
 python-multipart==0.0.9
 Pillow==10.3.0
+transformers==4.47.3
 
 SQLAlchemy==2.0.31
 psycopg[binary]==3.1.19

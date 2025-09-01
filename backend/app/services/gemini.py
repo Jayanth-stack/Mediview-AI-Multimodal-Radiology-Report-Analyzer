@@ -5,6 +5,12 @@ from typing import Optional, Any
 from PIL import Image
 import io
 import google.generativeai as genai
+from typing import Optional, List
+from fastapi import UploadFile
+import io
+from PIL import Image
+import json
+import re
 
 from app.core.config import settings
 
@@ -56,12 +62,7 @@ def get_gemini() -> GeminiService:
     return _gemini_singleton
 from __future__ import annotations
 
-from typing import Optional, List
-from fastapi import UploadFile
-import io
-from PIL import Image
-import json
-import re
+
 
 try:
     import google.generativeai as genai
