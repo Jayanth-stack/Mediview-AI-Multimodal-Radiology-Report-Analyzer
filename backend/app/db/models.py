@@ -93,5 +93,5 @@ class Document(Base):
     doc_type: Mapped[str] = mapped_column(String(50), index=True)  # e.g., "guideline", "case"
     embedding = mapped_column(Vector(768) if Vector else Text, nullable=True)  # 768 dims for Gemini embeddings
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    doc_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 

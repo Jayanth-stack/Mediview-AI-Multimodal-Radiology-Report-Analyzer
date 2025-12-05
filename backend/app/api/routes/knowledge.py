@@ -19,7 +19,7 @@ class DocumentCreate(BaseModel):
     content: str
     source: str
     doc_type: str
-    metadata: Optional[dict] = None
+    doc_metadata: Optional[dict] = None
 
 
 class DocumentResponse(BaseModel):
@@ -70,7 +70,7 @@ async def add_document(
         content=doc.content,
         source=doc.source,
         doc_type=doc.doc_type,
-        metadata=doc.metadata
+        doc_metadata=doc.doc_metadata
     )
     
     if doc_id is None:
@@ -183,7 +183,7 @@ async def get_document(
         "source": doc.source,
         "doc_type": doc.doc_type,
         "created_at": doc.created_at,
-        "metadata": doc.metadata
+        "doc_metadata": doc.doc_metadata
     }
 
 

@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column('doc_type', sa.String(length=50), nullable=False),
         sa.Column('embedding', sa.Text(), nullable=True),  # Will be vector(768) after extension
         sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('metadata', sa.JSON(), nullable=True),
+        sa.Column('doc_metadata', sa.JSON(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     

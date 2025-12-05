@@ -23,7 +23,7 @@ class VectorStore:
         content: str,
         source: str,
         doc_type: str,
-        metadata: Optional[dict] = None
+        doc_metadata: Optional[dict] = None
     ) -> Optional[int]:
         """Add a document to the knowledge base with its embedding.
         
@@ -48,7 +48,7 @@ class VectorStore:
             source=source,
             doc_type=doc_type,
             embedding=embedding,
-            metadata=metadata
+            doc_metadata=doc_metadata
         )
         self.session.add(doc)
         self.session.commit()
