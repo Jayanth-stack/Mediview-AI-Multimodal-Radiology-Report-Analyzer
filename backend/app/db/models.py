@@ -1,9 +1,14 @@
 from typing import Optional
-from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON, DateTime, Boolean
+from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON, DateTime, Boolean, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
 import enum
 from datetime import datetime
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None  # Fallback if pgvector not installed
 
 
 class User(Base):
@@ -75,3 +80,18 @@ class Job(Base):
     error: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     s3_key: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+
+
+class Document(Base):
+    """Document model for RAG knowledge base with vector embeddings."""
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(500), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(200), index=True)  # e.g., "radiopaedia", "acr"
+    doc_type: Mapped[str] = mapped_column(String(50), index=True)  # e.g., "guideline", "case"
+    embedding = mapped_column(Vector(768) if Vector else Text, nullable=True)  # 768 dims for Gemini embeddings
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+

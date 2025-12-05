@@ -11,6 +11,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.analyze_job import router as analyze_job_router
 from app.api.routes.studies import router as studies_router
 from app.api.routes.login import router as login_router
+from app.api.routes.knowledge import router as knowledge_router
 from app.schemas.entities import AnalysisResponse
 from app.services.gemini import get_gemini_service
 from app.db.session import init_engine_and_create_all
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(analyze_job_router)
     app.include_router(studies_router)
+    app.include_router(knowledge_router)
 
     @app.on_event("startup")
     def _on_startup() -> None:

@@ -13,8 +13,13 @@ from app.schemas.entities import AnalysisResponse, Finding, BoundingBox
 
 
 class GeminiService:
-    def __init__(self) -> None:
+    """Gemini AI service with RAG support for enhanced medical image analysis."""
+    
+    def __init__(self, vector_store: Optional[Any] = None) -> None:
         self._enabled = False
+        self._vector_store = vector_store
+        self._rag_enabled = settings.RAG_ENABLED
+        
         if settings.GEMINI_API_KEY:
             try:
                 genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -23,6 +28,10 @@ class GeminiService:
                 self._enabled = True
             except Exception as e:
                 print(f"Failed to initialize Gemini: {e}")
+    
+    def set_vector_store(self, vector_store: Any) -> None:
+        """Set the vector store for RAG functionality."""
+        self._vector_store = vector_store
 
     async def analyze(
         self,
@@ -33,7 +42,6 @@ class GeminiService:
         image_bytes = await image.read()
         
         if not self._enabled:
-            # Deterministic stubbed response while models are not configured
             return AnalysisResponse(
                 summary="No Gemini API key configured; returning stubbed summary.",
                 findings=[
@@ -42,7 +50,8 @@ class GeminiService:
                 notes="Configure GEMINI_API_KEY env to enable real inference.",
             )
 
-        findings = self.classify_bytes(image_bytes)
+        # Run analysis with optional RAG context
+        findings = self.classify_bytes_with_rag(image_bytes)
         
         # Summarize report text if provided
         summary_text = ""
@@ -55,8 +64,41 @@ class GeminiService:
         
         final_summary = summary_text or "Automated analysis complete. Review findings and images."
         return AnalysisResponse(summary=final_summary, findings=findings, notes=None)
+    
+    def _retrieve_context(self, query: str) -> str:
+        """Retrieve relevant medical knowledge based on query.
+        
+        Args:
+            query: Search query (typically finding labels or medical terms)
+            
+        Returns:
+            Formatted context string from relevant documents
+        """
+        if not self._vector_store or not self._rag_enabled:
+            return ""
+        
+        try:
+            docs = self._vector_store.search(query, limit=settings.RAG_TOP_K)
+            
+            if not docs:
+                return ""
+            
+            # Format retrieved documents as context
+            context_parts = []
+            for doc in docs:
+                # Limit content to avoid token overflow
+                content_preview = doc.content[:1500] if len(doc.content) > 1500 else doc.content
+                context_parts.append(
+                    f"[Source: {doc.source}] {doc.title}:\n{content_preview}"
+                )
+            
+            return "\n\n---\n\n".join(context_parts)
+        except Exception as e:
+            print(f"RAG retrieval error: {e}")
+            return ""
 
     def classify_bytes(self, image_bytes: bytes) -> list[Finding]:
+        """Basic image classification without RAG."""
         if not self._enabled:
             return [Finding(label="possible_abnormality", confidence=0.42)]
         
@@ -92,6 +134,61 @@ class GeminiService:
         except Exception as e:
             print(f"Gemini vision error: {e}")
             return []
+    
+    def classify_bytes_with_rag(self, image_bytes: bytes) -> list[Finding]:
+        """Enhanced image classification with RAG context retrieval.
+        
+        This method:
+        1. Performs initial image analysis
+        2. Retrieves relevant medical knowledge based on findings
+        3. Re-analyzes with the retrieved context for better accuracy
+        """
+        # Step 1: Initial classification
+        initial_findings = self.classify_bytes(image_bytes)
+        
+        if not initial_findings or not self._vector_store or not self._rag_enabled:
+            return initial_findings
+        
+        # Step 2: Build query from findings
+        query = " ".join([f.label for f in initial_findings[:3]])  # Top 3 findings
+        
+        # Step 3: Retrieve context
+        context = self._retrieve_context(query)
+        
+        if not context:
+            return initial_findings
+        
+        # Step 4: Re-analyze with context
+        try:
+            pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            
+            enhanced_prompt = f"""You are a radiologist assistant analyzing a medical image.
+            
+Based on relevant medical literature and guidelines:
+
+{context}
+
+---
+
+Now analyze this medical image. Consider the reference information above to provide more accurate and detailed findings.
+
+Return a JSON array where each finding has:
+- "label": detailed description of the finding
+- "confidence": confidence score between 0 and 1  
+- "bbox": optional bounding box with x, y, width, height
+
+Be specific, use proper medical terminology, and reference relevant guidelines where applicable.
+Return ONLY the JSON array, no other text."""
+            
+            response = self._vision_model.generate_content([enhanced_prompt, pil_image])
+            enhanced_findings = self._parse_findings(response.text)
+            
+            if enhanced_findings:
+                return enhanced_findings
+        except Exception as e:
+            print(f"RAG-enhanced analysis error: {e}")
+        
+        return initial_findings
 
     def summarize_text(self, text: str) -> str:
         if not self._enabled or not text:
