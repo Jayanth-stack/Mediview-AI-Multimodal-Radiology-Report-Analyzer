@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.api import deps
 from app.core import security
@@ -12,12 +13,6 @@ from app.db.models import User
 from app.db.session import get_session
 
 router = APIRouter(prefix="/login", tags=["login"])
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-from pydantic import BaseModel
 
 class Token(BaseModel):
     access_token: str

@@ -6,7 +6,7 @@ import mimetypes
 from app.tasks.celery_app import celery_app
 from app.db.session import get_session
 from app.db.models import Job, Study, Finding
-from app.services.gemini import get_gemini
+from app.services.gemini import get_gemini_service
 from app.services.storage import get_s3_storage
 from app.core.config import settings
 import redis as redis_sync  # type: ignore
@@ -55,7 +55,7 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         summary: str = ""
 
         try:
-            gemini = get_gemini()
+            gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
             out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
             findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
