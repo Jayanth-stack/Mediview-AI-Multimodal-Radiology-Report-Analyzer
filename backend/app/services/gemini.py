@@ -1,73 +1,12 @@
 from __future__ import annotations
 
-import base64
-from typing import Optional, Any
-from PIL import Image
 import io
-import google.generativeai as genai
-from typing import Optional, List
-from fastapi import UploadFile
-import io
-from PIL import Image
 import json
 import re
-
-from app.core.config import settings
-
-
-class GeminiService:
-    def __init__(self) -> None:
-        if not settings.GEMINI_API_KEY:
-            raise RuntimeError("GEMINI_API_KEY not configured")
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model_name = settings.GEMINI_MODEL
-
-    def _image_to_part(self, img_bytes: bytes, mime_type: str) -> dict[str, Any]:
-        b64 = base64.b64encode(img_bytes).decode("utf-8")
-        return {
-            "inline_data": {
-                "mime_type": mime_type,
-                "data": b64,
-            }
-        }
-
-    def analyze(self, img_bytes: bytes, mime_type: str, report_text: Optional[str]) -> dict[str, Any]:
-        model = genai.GenerativeModel(self.model_name)
-        prompt = (
-            "You are a clinical imaging assistant. Given an image and optional prior report text, "
-            "list key findings (label + confidence 0-1) and produce a short summary suitable for a radiology note. "
-            "Respond as JSON with fields: findings: [{label, confidence}], summary: string."
-        )
-        parts = [prompt, self._image_to_part(img_bytes, mime_type)]
-        if report_text:
-            parts.append(f"Prior report: {report_text[:1500]}")
-        resp = model.generate_content(parts)
-        text = resp.text or "{}"
-        # Naive JSON capture; in production use a structured output spec
-        import json
-        try:
-            parsed = json.loads(text)
-        except Exception:
-            parsed = {"summary": text.strip(), "findings": []}
-        return parsed
-
-
-_gemini_singleton: Optional[GeminiService] = None
-
-
-def get_gemini() -> GeminiService:
-    global _gemini_singleton
-    if _gemini_singleton is None:
-        _gemini_singleton = GeminiService()
-    return _gemini_singleton
-from __future__ import annotations
-
-
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+from typing import Optional, Any, List
+import google.generativeai as genai
+from fastapi import UploadFile
+from PIL import Image
 
 from app.core.config import settings
 from app.schemas.entities import AnalysisResponse, Finding, BoundingBox
@@ -76,7 +15,7 @@ from app.schemas.entities import AnalysisResponse, Finding, BoundingBox
 class GeminiService:
     def __init__(self) -> None:
         self._enabled = False
-        if settings.GEMINI_API_KEY and genai:
+        if settings.GEMINI_API_KEY:
             try:
                 genai.configure(api_key=settings.GEMINI_API_KEY)
                 self._model = genai.GenerativeModel(settings.GEMINI_MODEL)

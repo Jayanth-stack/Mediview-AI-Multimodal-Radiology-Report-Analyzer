@@ -17,11 +17,13 @@ class PresignRequest(BaseModel):
     use_post: bool = False
 
 
+from typing import Optional
+
 class PresignResponse(BaseModel):
     key: str
     method: str
     url: str
-    fields: dict | None = None
+    fields: Optional[dict] = None
 
 
 @router.post("/presign", response_model=PresignResponse)

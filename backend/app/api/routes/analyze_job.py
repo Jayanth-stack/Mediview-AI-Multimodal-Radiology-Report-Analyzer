@@ -13,9 +13,11 @@ from app.api import deps
 router = APIRouter(prefix="/api/analyze")
 
 
+from typing import Optional
+
 class StartAnalyzeRequest(BaseModel):
     s3_key: str
-    report_text: str | None = None
+    report_text: Optional[str] = None
 
 
 class StartAnalyzeResponse(BaseModel):

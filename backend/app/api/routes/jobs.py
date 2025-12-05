@@ -5,7 +5,7 @@ from sse_starlette.sse import EventSourceResponse
 import asyncio
 import json
 from pydantic import BaseModel
-from typing import Annotated
+from typing import Annotated, Optional
 
 from app.db.session import get_session
 from app.db.models import Job, User
@@ -21,8 +21,8 @@ class JobStatus(BaseModel):
     id: str
     status: str
     progress: int
-    error: str | None = None
-    result: dict | None = None
+    error: Optional[str] = None
+    result: Optional[dict] = None
 
 
 @router.get("/{job_id}", response_model=JobStatus)
@@ -50,7 +50,7 @@ def get_job(
 async def job_events(
     job_id: str, 
     request: Request,
-    token: Annotated[str | None, Query()] = None
+    token: Annotated[Optional[str], Query()] = None
 ):
     # Manually validate token for SSE since EventSource doesn't support custom headers
     if not token:

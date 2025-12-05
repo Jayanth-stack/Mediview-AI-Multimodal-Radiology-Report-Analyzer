@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlalchemy import String, Integer, Float, ForeignKey, Enum, JSON, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
@@ -16,7 +17,6 @@ class User(Base):
     is_superuser: Mapped[bool] = mapped_column(Boolean(), default=False)
 
 
-
 class Study(Base):
     __tablename__ = "studies"
 
@@ -26,7 +26,7 @@ class Study(Base):
     image_s3_key: Mapped[str] = mapped_column(String(256))
     source : Mapped[str] = mapped_column(String(128), default = 'upload')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    patient_context : Mapped[str] = mapped_column(String(4000), nullable = True)
+    patient_context : Mapped[Optional[str]] = mapped_column(String(4000), nullable = True)
 
 
     reports: Mapped[list["Report"]] = relationship("Report", back_populates="study")
@@ -39,7 +39,7 @@ class Report(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     study_id: Mapped[int] = mapped_column(ForeignKey("studies.id"))
     text: Mapped[str] = mapped_column(String(4000))
-    summary_model : Mapped[str] = mapped_column(String(128), nullable = True)
+    summary_model : Mapped[Optional[str]] = mapped_column(String(128), nullable = True)
 
     study: Mapped["Study"] = relationship("Study", back_populates="reports")
 
@@ -51,9 +51,9 @@ class Finding(Base):
     study_id: Mapped[int] = mapped_column(ForeignKey("studies.id"))
     label: Mapped[str] = mapped_column(String(128))
     confidence: Mapped[float] = mapped_column(Float)
-    model_name: Mapped[str] = mapped_column(String(128), nullable = True)
-    model_version: Mapped[str] = mapped_column(String(128), nullable = True)
-    extra: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    model_name: Mapped[Optional[str]] = mapped_column(String(128), nullable = True)
+    model_version: Mapped[Optional[str]] = mapped_column(String(128), nullable = True)
+    extra: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     study: Mapped["Study"] = relationship("Study", back_populates="findings")
 
@@ -72,7 +72,6 @@ class Job(Base):
     type: Mapped[str] = mapped_column(String(32), default="analyze")
     status: Mapped[str] = mapped_column(String(16), default=JobStatusEnum.queued.value)
     progress: Mapped[int] = mapped_column(Integer, default=0)
-    error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    s3_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
-
+    error: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    s3_key: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)

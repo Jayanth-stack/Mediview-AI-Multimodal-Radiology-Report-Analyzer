@@ -25,13 +25,15 @@ class FindingOut(BaseModel):
     bbox: Bbox
 
 
+from typing import Optional
+
 class StudyOut(BaseModel):
     id: int
     image_url: str
     findings: list[FindingOut]
     patient_id: str
     modality: str
-    created_at: str | None
+    created_at: Optional[str]
 
 
 @router.get("/{study_id}", response_model=StudyOut)
