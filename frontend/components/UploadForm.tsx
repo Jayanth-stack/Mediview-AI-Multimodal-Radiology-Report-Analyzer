@@ -28,8 +28,13 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       setError("Select an image");
       return;
     }
-    
-    const imageUrl = URL.createObjectURL(file);
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError("Not authenticated. Please login.");
+      return;
+    }
+
     // onAnalysisStart(imageUrl, report); // This line is removed as per the new_code
 
     setLoading(true);
@@ -38,13 +43,16 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       // 1) Presign
       const presign = await fetch(`${backendUrl}/api/uploads/presign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ filename: file.name, content_type: file.type, use_post: false }),
       });
       if (!presign.ok) throw new Error(`presign HTTP ${presign.status}`);
       const presignData = await presign.json();
 
-      // 2) PUT upload directly to MinIO
+      // 2) PUT upload directly to MinIO (Does not need our backend auth, uses presigned URL)
       const putResp = await fetch(presignData.url, {
         method: "PUT",
         headers: { "Content-Type": file.type },
@@ -55,7 +63,10 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       // 3) Start analyze job
       const startResp = await fetch(`${backendUrl}/api/analyze/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ s3_key: presignData.key, report_text: report || null }),
       });
       if (!startResp.ok) throw new Error(`start HTTP ${startResp.status}`);
@@ -64,7 +75,7 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       setJobId(jid);
       // 4) Prefer SSE for live progress
       try {
-        const es = new EventSource(`${backendUrl}/api/jobs/${jid}/events`);
+        const es = new EventSource(`${backendUrl}/api/jobs/${jid}/events?token=${token}`);
         esRef.current = es;
         es.addEventListener("progress", (ev: MessageEvent) => {
           const data = JSON.parse((ev as MessageEvent).data);
@@ -92,7 +103,9 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
         let attempts = 0;
         let final: any = null;
         while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`);
+          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
           const sj = await st.json();
           setProgress(sj.progress || 0);
           if (sj.status === "completed") { final = sj; break; }
@@ -114,7 +127,10 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
     if (result?.status === "completed") {
       (async () => {
         try {
-          const studyResp = await fetch(`${backendUrl}/api/studies/${result.result.study_id}`);
+          const token = localStorage.getItem('token');
+          const studyResp = await fetch(`${backendUrl}/api/studies/${result.result.study_id}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
           if (!studyResp.ok) throw new Error("fetch study failed");
           const studyData = await studyResp.json();
           setStudy(studyData);

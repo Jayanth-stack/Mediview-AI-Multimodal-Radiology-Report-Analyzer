@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from uuid import uuid4
 
 from app.services.storage import get_s3_storage
+from app.api import deps
 
 
 router = APIRouter(prefix="/api/uploads")
@@ -27,6 +28,7 @@ class PresignResponse(BaseModel):
 def presign(
     body: PresignRequest,
     s3=Depends(get_s3_storage),
+    current_user=Depends(deps.get_current_user),
 ) -> PresignResponse:
     key = f"uploads/{uuid4().hex}-{body.filename}"
     if body.use_post:

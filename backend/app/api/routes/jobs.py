@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
-import json
-import time
-import redis.asyncio as aioredis  # type: ignore
-from app.core.config import settings
-from fastapi import Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from sse_starlette.sse import EventSourceResponse
 import asyncio
 import json
 from pydantic import BaseModel
+from typing import Annotated
 
 from app.db.session import get_session
-from app.db.models import Job
-
+from app.db.models import Job, User
+from app.api import deps
+from app.core import security
+from app.core.config import settings
+from jose import jwt, JWTError
 
 router = APIRouter(prefix="/api/jobs")
 
@@ -28,7 +26,10 @@ class JobStatus(BaseModel):
 
 
 @router.get("/{job_id}", response_model=JobStatus)
-def get_job(job_id: str) -> JobStatus:
+def get_job(
+    job_id: str,
+    current_user: User = Depends(deps.get_current_user)
+) -> JobStatus:
     session = get_session()
     try:
         job = session.get(Job, job_id)
@@ -45,30 +46,24 @@ def get_job(job_id: str) -> JobStatus:
         session.close()
 
 
-async def _sse_generator(job_id: str):
-    # Use Redis pubsub channel per job
-    redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+@router.get("/{job_id}/events")
+async def job_events(
+    job_id: str, 
+    request: Request,
+    token: Annotated[str | None, Query()] = None
+):
+    # Manually validate token for SSE since EventSource doesn't support custom headers
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     try:
-        pubsub = redis.pubsub()
-        await pubsub.subscribe(f"jobs:{job_id}")
-        # send an initial ping
-        yield f"event: ping\ndata: {json.dumps({'ts': time.time()})}\n\n"
-        async for msg in pubsub.listen():
-            if msg.get("type") != "message":
-                continue
-            data = msg.get("data")
-            yield f"data: {data}\n\n"
-    finally:
-        await redis.close()
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except (JWTError, Exception):
+        raise HTTPException(status_code=401, detail="Invalid token")
 
-
-@router.get("/{job_id}/events")
-async def job_events(job_id: str) -> StreamingResponse:
-    return StreamingResponse(_sse_generator(job_id), media_type="text/event-stream")
-
-
-@router.get("/{job_id}/events")
-async def job_events(job_id: str, request: Request):
     async def event_gen():
         last_progress = -1
         last_status = None
@@ -99,4 +94,3 @@ async def job_events(job_id: str, request: Request):
             await asyncio.sleep(0.5)
 
     return EventSourceResponse(event_gen())
-

@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.db.session import get_session
 from app.db.models import Job
 from app.tasks.analyze import analyze_task
+from app.api import deps
 
 
 router = APIRouter(prefix="/api/analyze")
@@ -22,7 +23,10 @@ class StartAnalyzeResponse(BaseModel):
 
 
 @router.post("/start", response_model=StartAnalyzeResponse)
-def start_analyze(body: StartAnalyzeRequest) -> StartAnalyzeResponse:
+def start_analyze(
+    body: StartAnalyzeRequest,
+    current_user=Depends(deps.get_current_user),
+) -> StartAnalyzeResponse:
     job_id = uuid4().hex
     session = get_session()
     try:
