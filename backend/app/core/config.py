@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-1.5-flash"
     GEMINI_VISION_MODEL: str = "gemini-1.5-flash"
 
+    SECRET_KEY: str = "supersecretkey"  # Change this in production
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+
     class Config:
         env_file = ".env"
 

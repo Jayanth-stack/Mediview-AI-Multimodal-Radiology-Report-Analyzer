@@ -10,7 +10,7 @@ from app.api.routes.uploads import router as uploads_router
 from app.api.routes.jobs import router as jobs_router
 from app.api.routes.analyze_job import router as analyze_job_router
 from app.api.routes.studies import router as studies_router
-from app.api.routes.studies import router as studies_router
+from app.api.routes.login import router as login_router
 from app.schemas.entities import AnalysisResponse
 from app.services.gemini import get_gemini_service
 from app.db.session import init_engine_and_create_all
@@ -34,11 +34,11 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
+    app.include_router(login_router, prefix="/api")
     app.include_router(analyze_router)
     app.include_router(uploads_router)
     app.include_router(jobs_router)
     app.include_router(analyze_job_router)
-    app.include_router(studies_router)
     app.include_router(studies_router)
 
     @app.on_event("startup")
