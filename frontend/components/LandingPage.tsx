@@ -12,7 +12,7 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
       <div className="relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
           <div className="text-center">
-            <motion.h1 
+            <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
@@ -20,7 +20,7 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
             >
               MediViewAI
             </motion.h1>
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -35,12 +35,20 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
               className="flex flex-col sm:flex-row gap-4 justify-center"
             >
               <button
-                onClick={onStartAnalysis}
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-glow transition-all duration-300 transform hover:scale-105"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onStartAnalysis();
+                }}
+                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-glow transition-all duration-300 transform hover:scale-105 cursor-pointer"
               >
                 Start Analysis
               </button>
-              <button className="px-8 py-4 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-all duration-300">
+              <button
+                type="button"
+                className="px-8 py-4 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-all duration-300"
+              >
                 Learn More
               </button>
             </motion.div>
@@ -59,9 +67,9 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
               Combining computer vision and natural language processing for comprehensive radiology insights
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-8">
-            <motion.div 
+            <motion.div
               whileHover={{ y: -5 }}
               className="medical-highlight p-8 rounded-2xl shadow-soft"
             >
@@ -74,7 +82,7 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
               <p className="text-slate-600">AI-powered identification of anatomical structures and potential abnormalities in medical images.</p>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               whileHover={{ y: -5 }}
               className="bg-white p-8 rounded-2xl shadow-soft border border-slate-200"
             >
@@ -87,7 +95,7 @@ export default function LandingPage({ onStartAnalysis }: LandingPageProps) {
               <p className="text-slate-600">Natural language processing of radiology reports to extract key findings and correlate with imaging.</p>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               whileHover={{ y: -5 }}
               className="bg-white p-8 rounded-2xl shadow-soft border border-slate-200"
             >

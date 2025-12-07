@@ -1,5 +1,7 @@
+from typing import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
 from app.core.config import settings
 
@@ -32,4 +34,14 @@ def _ensure_engine() -> None:
 def get_session():
     _ensure_engine()
     return SessionLocal()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI dependency for database session."""
+    _ensure_engine()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 

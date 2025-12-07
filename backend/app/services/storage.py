@@ -9,9 +9,20 @@ from app.core.config import settings
 
 class S3Storage:
     def __init__(self) -> None:
+        # Internal client for backend operations (uses Docker internal URL)
         self._client = boto3.client(
             "s3",
             endpoint_url=settings.S3_ENDPOINT_URL,
+            region_name=settings.S3_REGION,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            config=Config(signature_version="s3v4"),
+            use_ssl=bool(settings.S3_SECURE),
+        )
+        # Public client for browser-accessible presigned URLs (uses localhost URL)
+        self._public_client = boto3.client(
+            "s3",
+            endpoint_url=settings.PUBLIC_S3_ENDPOINT_URL,
             region_name=settings.S3_REGION,
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
@@ -33,7 +44,8 @@ class S3Storage:
         return self.get_bytes(key)
 
     def generate_presigned_put(self, key: str, content_type: str, expires_seconds: int = 3600) -> str:
-        return self._client.generate_presigned_url(
+        # Use public client so browser can reach the URL
+        return self._public_client.generate_presigned_url(
             ClientMethod="put_object",
             Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
             ExpiresIn=expires_seconds,
@@ -44,7 +56,8 @@ class S3Storage:
     ) -> dict:
         conditions = [["content-length-range", 1, max_size_mb * 1024 * 1024], {"Content-Type": content_type}]
         fields = {"Content-Type": content_type}
-        return self._client.generate_presigned_post(
+        # Use public client so browser can reach the URL
+        return self._public_client.generate_presigned_post(
             Bucket=self._bucket,
             Key=key,
             Fields=fields,
