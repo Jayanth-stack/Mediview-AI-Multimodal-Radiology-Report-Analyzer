@@ -140,6 +140,48 @@ curl -X POST http://localhost:8000/api/knowledge/documents \
   }'
 ```
 
+### Frontend UI
+
+The frontend features a premium, modern design built with React, Next.js, Tailwind CSS, and Framer Motion for smooth animations.
+
+#### Demo Video
+
+<p align="center">
+  <img src="assets/frontend/ui-demo.webp" alt="MediViewAI UI Demo" width="800">
+</p>
+
+#### Key Pages
+
+| Page | Features | Preview |
+|------|----------|---------|
+| **Login** | Glassmorphism card, animated gradient orbs, password toggle, loading states | ![Login](assets/frontend/login-page.png) |
+| **Landing** | Animated hero, statistics counter, feature cards with hover effects | ![Landing](assets/frontend/landing-page.png) |
+| **Upload** | Drag-and-drop with visual feedback, file preview, animated progress bar | ![Upload](assets/frontend/upload-form.png) |
+
+#### Design System
+
+The frontend uses a cohesive design system with:
+
+-   **Glassmorphism**: Frosted glass effects with `backdrop-blur`
+-   **Gradient Themes**: Blue → Purple → Pink gradient palette
+-   **Animations**: Framer Motion for smooth page transitions and micro-interactions
+-   **Typography**: Inter font family with proper weight hierarchy
+-   **Responsive**: Mobile-first design that works on all screen sizes
+
+#### CSS Utilities
+
+Custom utility classes in `globals.css`:
+
+```css
+.glass { /* Glassmorphism effect */ }
+.gradient-text { /* Gradient text color */ }
+.animate-shimmer { /* Loading shimmer animation */ }
+.animate-float { /* Gentle floating animation */ }
+.btn-primary, .btn-secondary { /* Button styles */ }
+.card, .card-dark { /* Card containers */ }
+.badge-success, .badge-warning { /* Status badges */ }
+```
+
 ### Roadmap
 
 -   **Phase 3**: ✅ Real model integrations; streaming job progress via WebSockets/SSE; authentication and logging.

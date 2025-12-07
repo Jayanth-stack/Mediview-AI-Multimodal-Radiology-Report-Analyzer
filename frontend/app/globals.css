@@ -2,146 +2,237 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom base styles */
+/* Premium Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --gradient-primary: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+  --gradient-dark: linear-gradient(135deg, #0f172a, #581c87, #0f172a);
+  --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+}
+
 @layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    scroll-behavior: smooth;
+  }
+  
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    @apply antialiased;
+  }
+  
+  ::selection {
+    @apply bg-purple-500/30;
   }
 }
 
-/* Rich component styles */
-@layer components {
-  /* Glass morphism card effect */
-  .glass-card {
-    @apply bg-white/70 backdrop-blur-sm border border-white/20 shadow-xl rounded-2xl;
-  }
-  
-  /* Elevated card with subtle shadow */
-  .elevated-card {
-    @apply bg-white shadow-lg rounded-xl border border-slate-200/60 hover:shadow-xl transition-all duration-300;
-  }
-  
-  /* Primary button with gradient */
-  .btn-primary {
-    @apply bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 transform hover:-translate-y-0.5;
-  }
-  
-  /* Secondary button */
-  .btn-secondary {
-    @apply bg-white text-slate-700 px-6 py-3 rounded-lg font-medium border border-slate-300 shadow-sm hover:shadow-md hover:bg-slate-50 transition-all duration-200;
-  }
-  
-  /* Input field styling */
-  .input-field {
-    @apply w-full px-4 py-3 rounded-lg border border-slate-300 bg-white/80 backdrop-blur-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 placeholder-slate-400;
-  }
-  
-  /* Upload area */
-  .upload-area {
-    @apply border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-300 cursor-pointer;
-  }
-  
-  /* Progress bar */
-  .progress-bar {
-    @apply w-full bg-slate-200 rounded-full h-2 overflow-hidden;
-  }
-  
-  .progress-fill {
-    @apply h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-300 ease-out;
-  }
-  
-  /* Findings list item */
-  .finding-item {
-    @apply p-4 bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/60 hover:shadow-md hover:border-blue-300/60 transition-all duration-200 cursor-pointer;
-  }
-  
-  /* Medical viewer container */
-  .viewer-container {
-    @apply relative bg-white rounded-xl shadow-lg border border-slate-200/60 overflow-hidden;
-  }
-  
-  /* Drawer overlay */
-  .drawer-overlay {
-    @apply bg-white/95 backdrop-blur-md border-l border-slate-200/60 shadow-2xl;
-  }
-}
-
-/* Utility classes */
 @layer utilities {
-  /* Subtle text gradients */
-  .text-gradient {
-    @apply bg-gradient-to-r from-slate-700 to-slate-900 bg-clip-text text-transparent;
+  /* Glassmorphism */
+  .glass {
+    @apply bg-white/10 backdrop-blur-xl border border-white/20;
   }
   
-  .text-gradient-blue {
-    @apply bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent;
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-xl border border-white/10;
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent;
+  }
+
+  /* Glow Effects */
+  .glow {
+    box-shadow: var(--shadow-glow);
   }
   
-  /* Smooth animations */
-  .animate-fade-in {
-    animation: fadeIn 0.6s ease-out forwards;
+  .glow-lg {
+    box-shadow: 0 0 60px rgba(139, 92, 246, 0.25);
+  }
+
+  /* Shimmer Animation */
+  .animate-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
   }
   
-  .animate-slide-up {
-    animation: slideUp 0.8s ease-out forwards;
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
   }
-  
+
+  /* Float Animation */
   .animate-float {
-    animation: float 3s ease-in-out infinite;
+    animation: float 6s ease-in-out infinite;
   }
   
-  /* Custom shadows */
-  .shadow-soft {
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08);
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  /* Pulse Glow */
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
   }
   
-  .shadow-glow {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+    }
+  }
+
+  /* Gradient Border */
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(white, white) padding-box,
+                var(--gradient-primary) border-box;
+    border: 2px solid transparent;
+  }
+
+  /* Custom Scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.5);
+  }
+
+  /* Hide Scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }
 
-/* Keyframe animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+@layer components {
+  /* Premium Button Styles */
+  .btn-primary {
+    @apply px-6 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-semibold rounded-xl shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-white/80 backdrop-blur-sm border-2 border-slate-200 text-slate-700 font-semibold rounded-xl hover:border-purple-300 hover:bg-white transition-all duration-300;
+  }
+  
+  .btn-ghost {
+    @apply px-4 py-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 rounded-xl font-medium transition-all duration-200;
+  }
+
+  /* Input Styles */
+  .input-primary {
+    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-200;
+  }
+  
+  .input-light {
+    @apply w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all duration-200;
+  }
+
+  /* Card Styles */
+  .card {
+    @apply bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8;
+  }
+  
+  .card-dark {
+    @apply bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/10 p-8;
+  }
+
+  /* Badge Styles */
+  .badge {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full text-sm font-medium;
+  }
+  
+  .badge-success {
+    @apply inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-full text-sm font-medium;
+  }
+  
+  .badge-warning {
+    @apply inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-full text-sm font-medium;
+  }
+  
+  .badge-error {
+    @apply inline-flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-600 rounded-full text-sm font-medium;
+  }
+
+  /* Alert Styles */
+  .alert-error {
+    @apply bg-red-500/20 border border-red-500/30 text-red-200 px-4 py-3 rounded-xl text-sm flex items-center gap-2;
+  }
+  
+  .alert-success {
+    @apply bg-emerald-500/20 border border-emerald-500/30 text-emerald-200 px-4 py-3 rounded-xl text-sm flex items-center gap-2;
+  }
+  
+  .alert-info {
+    @apply bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2;
+  }
+
+  /* Skeleton Loading */
+  .skeleton {
+    @apply bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse rounded;
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
 }
 
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Focus Visible Outline */
+*:focus-visible {
+  @apply outline-none ring-2 ring-purple-500/50 ring-offset-2 ring-offset-white;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
-
-/* Medical-specific styling */
-.medical-highlight {
-  @apply bg-gradient-to-r from-emerald-100 to-teal-100 border-l-4 border-emerald-400;
-}
-
-.confidence-high {
-  @apply text-emerald-700 bg-emerald-100/60;
-}
-
-.confidence-medium {
-  @apply text-amber-700 bg-amber-100/60;
-}
-
-.confidence-low {
-  @apply text-rose-700 bg-rose-100/60;
-}
-
-/* Scrollbar styling */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  @apply bg-slate-100 rounded-full;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full hover:bg-slate-400;
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
