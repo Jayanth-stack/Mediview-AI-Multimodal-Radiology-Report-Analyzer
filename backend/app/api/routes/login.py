@@ -10,7 +10,7 @@ from app.api import deps
 from app.core import security
 from app.core.config import settings
 from app.db.models import User
-from app.db.session import get_session
+from app.db.session import get_db
 
 router = APIRouter(prefix="/login", tags=["login"])
 
@@ -20,7 +20,7 @@ class Token(BaseModel):
 
 @router.post("/access-token", response_model=Token)
 def login_access_token(
-    session: Annotated[Session, Depends(get_session)],
+    session: Annotated[Session, Depends(get_db)],
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Any:
     """

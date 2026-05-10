@@ -32,12 +32,24 @@ def start_analyze(
     job_id = uuid4().hex
     session = get_session()
     try:
-        job = Job(id=job_id, type="analyze", status="queued", progress=0, s3_key=body.s3_key)
+        job = Job(
+            id=job_id,
+            user_id=current_user.id,
+            type="analyze",
+            status="queued",
+            progress=0,
+            s3_key=body.s3_key,
+        )
         session.add(job)
         session.commit()
     finally:
         session.close()
 
-    analyze_task.delay(job_id=job_id, s3_key=body.s3_key, report_text=body.report_text)
+    analyze_task.delay(
+        job_id=job_id,
+        s3_key=body.s3_key,
+        report_text=body.report_text,
+        user_id=current_user.id,
+    )
     return StartAnalyzeResponse(job_id=job_id)
 
