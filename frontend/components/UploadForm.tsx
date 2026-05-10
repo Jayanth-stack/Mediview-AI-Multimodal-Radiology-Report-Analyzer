@@ -21,7 +21,6 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
   const [progressStage, setProgressStage] = useState<string>("");
   const [study, setStudy] = useState<any>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Generate file preview
@@ -120,61 +119,33 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       setJobId(jid);
       setProgress(45);
 
-      // 4) SSE or Polling
+      // 4) Poll for job completion with the bearer token kept out of URLs.
       setProgressStage("Running AI analysis...");
-      try {
-        const es = new EventSource(
-          `${backendUrl}/api/jobs/${jid}/events?token=${token}`
-        );
-        esRef.current = es;
-        es.addEventListener("progress", (ev: MessageEvent) => {
-          const data = JSON.parse(ev.data);
-          const newProgress = 45 + (data.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (data.status === "completed") {
-            setResult(data);
-            setProgressStage("Analysis complete!");
-            es.close();
-            esRef.current = null;
-          } else if (data.status === "failed") {
-            setError(data.error || "Analysis failed");
-            es.close();
-            esRef.current = null;
-          }
+      let attempts = 0;
+      let final: any = null;
+      while (attempts < 60) {
+        const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        es.onerror = () => {
-          es.close();
-          esRef.current = null;
-        };
-      } catch {
-        // Fallback polling
-      }
-
-      // Fallback polling
-      if (!esRef.current) {
-        let attempts = 0;
-        let final: any = null;
-        while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const sj = await st.json();
-          const newProgress = 45 + (sj.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (sj.status === "completed") {
-            final = sj;
-            break;
-          }
-          if (sj.status === "failed") {
-            throw new Error(sj.error || "Analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
-          attempts += 1;
+        if (!st.ok) {
+          throw new Error("Failed to load analysis status");
         }
-        if (!final) throw new Error("Analysis timeout");
-        setResult(final);
-        setProgressStage("Analysis complete!");
+        const sj = await st.json();
+        const newProgress = 45 + (sj.progress || 0) * 0.55;
+        setProgress(newProgress);
+        if (sj.status === "completed") {
+          final = sj;
+          break;
+        }
+        if (sj.status === "failed") {
+          throw new Error(sj.error || "Analysis failed");
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+        attempts += 1;
       }
+      if (!final) throw new Error("Analysis timeout");
+      setResult(final);
+      setProgressStage("Analysis complete!");
     } catch (err: any) {
       setError(err?.message || "Request failed");
     } finally {

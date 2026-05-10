@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core import security
 from app.db.models import User
-from app.db.session import get_session
+from app.db.session import get_db
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"/api/login/access-token"
@@ -17,7 +17,7 @@ reusable_oauth2 = OAuth2PasswordBearer(
 
 
 def get_current_user(
-    session: Annotated[Session, Depends(get_session)],
+    session: Annotated[Session, Depends(get_db)],
     token: Annotated[str, Depends(reusable_oauth2)],
 ) -> User:
     try:
