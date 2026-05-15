@@ -40,6 +40,20 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
+        return self.analyze_bytes(
+            image_bytes=image_bytes,
+            report_text=report_text,
+            patient_context=patient_context,
+        )
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        mime_type: Optional[str] = None,
+        report_text: Optional[str] = None,
+        patient_context: Optional[str] = None,
+    ) -> AnalysisResponse:
+        """Analyze image bytes from non-ASGI callers such as Celery workers."""
         
         if not self._enabled:
             return AnalysisResponse(
