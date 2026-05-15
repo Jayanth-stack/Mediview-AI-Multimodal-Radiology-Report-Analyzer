@@ -12,10 +12,10 @@ type View = "landing" | "upload" | "viewer";
 
 interface StudyData {
   id: number;
-  s3_key: string;
+  image_url: string;
   modality?: string;
   report?: any;
-  findings?: any[];
+  findings: any[];
 }
 
 export default function Home() {
@@ -196,7 +196,7 @@ export default function Home() {
                     Back to Home
                   </button>
                 </div>
-                <StudyViewer study={studyData} />
+                <StudyViewer imageSrc={studyData.image_url} findings={studyData.findings} />
               </div>
             </motion.div>
           )}

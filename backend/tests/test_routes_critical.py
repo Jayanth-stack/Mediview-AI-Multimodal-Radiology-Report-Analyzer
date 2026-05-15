@@ -4,10 +4,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api import deps
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -198,6 +201,77 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def _knowledge_client(self, current_user=None):
+        app = FastAPI()
+
+        fake_doc = SimpleNamespace(
+            id=1,
+            title="ACR Guideline",
+            source="acr",
+            doc_type="guideline",
+            content="Pneumothorax requires prompt recognition.",
+            created_at=None,
+            doc_metadata={"section": "chest"},
+        )
+        fake_store = Mock()
+        fake_store.add_document.return_value = fake_doc.id
+        fake_store.search.return_value = [fake_doc]
+        fake_store.list_all.return_value = [fake_doc]
+        fake_store.get_by_id.return_value = fake_doc
+        fake_store.delete.return_value = True
+        fake_store.count.return_value = 1
+
+        app.dependency_overrides[knowledge.get_vector_store_dep] = lambda: fake_store
+        if current_user is not None:
+            app.dependency_overrides[deps.get_current_user] = lambda: current_user
+        app.include_router(knowledge.router)
+        return TestClient(app), fake_store
+
+    def test_knowledge_routes_reject_unauthenticated_requests(self):
+        client, _ = self._knowledge_client()
+
+        read_resp = client.get("/api/knowledge/documents")
+        write_resp = client.post(
+            "/api/knowledge/documents",
+            json={
+                "title": "Poisoned Doc",
+                "content": "bad guidance",
+                "source": "attacker",
+                "doc_type": "case",
+            },
+        )
+
+        self.assertEqual(read_resp.status_code, 401)
+        self.assertEqual(write_resp.status_code, 401)
+
+    def test_knowledge_mutations_require_superuser(self):
+        user = SimpleNamespace(id=1, is_superuser=False)
+        client, fake_store = self._knowledge_client(current_user=user)
+
+        resp = client.delete("/api/knowledge/documents/1")
+
+        self.assertEqual(resp.status_code, 403)
+        fake_store.delete.assert_not_called()
+
+    def test_knowledge_superuser_can_add_document(self):
+        user = SimpleNamespace(id=1, is_superuser=True)
+        client, fake_store = self._knowledge_client(current_user=user)
+
+        resp = client.post(
+            "/api/knowledge/documents",
+            json={
+                "title": "ACR Guideline",
+                "content": "Pneumothorax requires prompt recognition.",
+                "source": "acr",
+                "doc_type": "guideline",
+                "doc_metadata": {"section": "chest"},
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["id"], 1)
+        fake_store.add_document.assert_called_once()
 
 
 if __name__ == "__main__":
