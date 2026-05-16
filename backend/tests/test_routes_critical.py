@@ -5,10 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
 from app.api import deps
 from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
+from app.main import create_app
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -204,6 +206,17 @@ class CriticalRouteTests(unittest.TestCase):
         auth_dependencies = [dependency.dependency for dependency in knowledge.router.dependencies]
 
         self.assertIn(deps.get_current_user, auth_dependencies)
+
+    def test_knowledge_stats_rejects_anonymous_client(self):
+        app = create_app()
+        app.dependency_overrides[knowledge.get_vector_store_dep] = Mock(
+            side_effect=AssertionError("anonymous request reached vector store")
+        )
+        client = TestClient(app)
+
+        response = client.get("/api/knowledge/stats")
+
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":
