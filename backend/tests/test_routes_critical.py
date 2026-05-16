@@ -7,7 +7,8 @@ from unittest.mock import Mock, patch
 from fastapi import HTTPException
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api import deps
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -198,6 +199,11 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_router_requires_authenticated_user(self):
+        auth_dependencies = [dependency.dependency for dependency in knowledge.router.dependencies]
+
+        self.assertIn(deps.get_current_user, auth_dependencies)
 
 
 if __name__ == "__main__":
