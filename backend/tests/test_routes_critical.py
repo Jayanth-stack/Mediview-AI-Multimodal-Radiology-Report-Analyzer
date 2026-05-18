@@ -4,10 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
+from app.api import deps
 from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import knowledge
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -198,6 +202,64 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_routes_require_authentication(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+
+        def fail_if_called():
+            raise AssertionError("knowledge data access should not run without auth")
+
+        app.dependency_overrides[knowledge.get_vector_store_dep] = fail_if_called
+        client = TestClient(app)
+
+        cases = [
+            ("get", "/api/knowledge/search?query=effusion", {}),
+            ("get", "/api/knowledge/documents", {}),
+            ("get", "/api/knowledge/documents/1", {}),
+            ("delete", "/api/knowledge/documents/1", {}),
+            ("get", "/api/knowledge/stats", {}),
+            (
+                "post",
+                "/api/knowledge/documents",
+                {
+                    "json": {
+                        "title": "ACR guideline",
+                        "content": "sensitive clinical guidance",
+                        "source": "acr",
+                        "doc_type": "guideline",
+                    }
+                },
+            ),
+        ]
+
+        for method, url, kwargs in cases:
+            with self.subTest(method=method, url=url):
+                response = getattr(client, method)(url, **kwargs)
+                self.assertEqual(response.status_code, 401)
+
+    def test_knowledge_routes_allow_authenticated_users(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+
+        fake_doc = SimpleNamespace(
+            id=1,
+            title="Chest X-Ray Guideline",
+            source="acr",
+            doc_type="guideline",
+            content="Pleural effusion can appear as costophrenic angle blunting.",
+        )
+        fake_store = SimpleNamespace(list_all=Mock(return_value=[fake_doc]))
+
+        app.dependency_overrides[deps.get_current_user] = lambda: object()
+        app.dependency_overrides[knowledge.get_vector_store_dep] = lambda: fake_store
+        client = TestClient(app)
+
+        response = client.get("/api/knowledge/documents")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["id"], 1)
+        self.assertEqual(response.json()[0]["title"], "Chest X-Ray Guideline")
 
 
 if __name__ == "__main__":
