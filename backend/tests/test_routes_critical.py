@@ -172,13 +172,14 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = Mock()
+            fake_s3.generate_presigned_get.return_value = "https://signed.example/study-view"
 
             out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
         finally:
             session.close()
 
+        fake_s3.generate_presigned_get.assert_called_once_with("uploads/xray.png", expires_seconds=3600)
         self.assertEqual(out.id, study.id)
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
@@ -190,7 +191,7 @@ class CriticalRouteTests(unittest.TestCase):
     def test_studies_get_study_not_found(self):
         session = self.SessionLocal()
         try:
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
+            fake_s3 = Mock()
             with self.assertRaises(HTTPException) as ctx:
                 studies.get_study(study_id=9999, session=session, s3=fake_s3, current_user=object())
         finally:
