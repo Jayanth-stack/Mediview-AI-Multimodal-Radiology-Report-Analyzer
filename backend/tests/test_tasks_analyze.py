@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.db.models import Finding, Job, Study
+from app.schemas.entities import AnalysisResponse, Finding as AnalysisFinding
 from app.tasks import analyze as analyze_module
 from tests.utils import build_test_db
 
@@ -22,17 +23,21 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
+    def __init__(self):
+        self.calls = []
+
+    def analyze_bytes(self, **kwargs):
+        self.calls.append(kwargs)
+        return AnalysisResponse(
+            summary="Opacity at left base.",
+            findings=[
+                AnalysisFinding(label="left basilar opacity", confidence=0.91),
             ],
-            "summary": "Opacity at left base.",
-        }
+        )
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
 
@@ -54,11 +59,12 @@ class AnalyzeTaskTests(unittest.TestCase):
     def test_analyze_task_success_path_persists_results(self):
         self._seed_job("job-success")
         fake_publisher = _FakePublisher()
+        fake_gemini = _FakeGemini()
 
         with (
             patch("app.tasks.analyze.get_session", side_effect=self.SessionLocal),
             patch("app.tasks.analyze.get_s3_storage", return_value=_FakeS3()),
-            patch("app.tasks.analyze.get_gemini_service", return_value=_FakeGemini()),
+            patch("app.tasks.analyze.get_gemini_service", return_value=fake_gemini),
             patch("app.tasks.analyze.redis_sync.from_url", return_value=fake_publisher),
         ):
             analyze_module.analyze_task.run(
@@ -75,6 +81,7 @@ class AnalyzeTaskTests(unittest.TestCase):
             self.assertEqual(job.progress, 100)
             self.assertEqual(job.result["summary"], "Opacity at left base.")
             self.assertEqual(job.result["s3_key"], "uploads/a.png")
+            self.assertEqual(job.result["findings"][0]["label"], "left basilar opacity")
 
             studies = session.query(Study).all()
             findings = session.query(Finding).all()
@@ -84,6 +91,10 @@ class AnalyzeTaskTests(unittest.TestCase):
         finally:
             session.close()
 
+        self.assertEqual(
+            fake_gemini.calls,
+            [{"image_bytes": b"fake-image-bytes", "report_text": "short history"}],
+        )
         self.assertGreater(len(fake_publisher.events), 0)
 
     def test_analyze_task_falls_back_to_stub_findings_when_gemini_fails(self):
