@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
-import mimetypes
+from typing import Optional, Any
 
 from app.tasks.celery_app import celery_app
 from app.db.session import get_session
@@ -11,6 +10,18 @@ from app.services.storage import get_s3_storage
 from app.core.config import settings
 import redis as redis_sync  # type: ignore
 import json
+
+
+def _finding_to_dict(finding: Any) -> dict:
+    if hasattr(finding, "model_dump"):
+        return finding.model_dump()
+    if isinstance(finding, dict):
+        return finding
+    return {
+        "label": getattr(finding, "label", ""),
+        "confidence": getattr(finding, "confidence", 0.0),
+        "bbox": getattr(finding, "bbox", None),
+    }
 
 
 @celery_app.task(name="analyze_task")
@@ -47,8 +58,6 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         # Load image bytes from object storage
         s3 = get_s3_storage()
         image_bytes = s3.get_object_bytes(s3_key)
-        mime, _ = mimetypes.guess_type(s3_key)
-        mime = mime or "image/png"
         publish({"status": job.status, "progress": 20, "step": "image_loaded"})
 
         findings: list[dict] = []
@@ -57,9 +66,12 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
-            findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
-            summary = str(out.get("summary", "")).strip()
+            out = gemini.analyze_bytes(image_bytes=image_bytes, report_text=report_text)
+            if hasattr(out, "model_dump"):
+                out = out.model_dump()
+            findings_raw = out.get("findings", []) if isinstance(out, dict) else []
+            findings = [_finding_to_dict(f) for f in findings_raw] if isinstance(findings_raw, list) else []
+            summary = str(out.get("summary", "")).strip() if isinstance(out, dict) else ""
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})
         except Exception:
             # Fallback stub if Gemini not configured/available

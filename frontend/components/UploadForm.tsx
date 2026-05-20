@@ -120,7 +120,7 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       setJobId(jid);
       setProgress(45);
 
-      // 4) SSE or Polling
+      // 4) Best-effort SSE progress plus authoritative polling for completion
       setProgressStage("Running AI analysis...");
       try {
         const es = new EventSource(
@@ -132,7 +132,6 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
           const newProgress = 45 + (data.progress || 0) * 0.55;
           setProgress(newProgress);
           if (data.status === "completed") {
-            setResult(data);
             setProgressStage("Analysis complete!");
             es.close();
             esRef.current = null;
@@ -147,37 +146,41 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
           esRef.current = null;
         };
       } catch {
-        // Fallback polling
+        // Polling below still completes the job flow.
       }
 
-      // Fallback polling
-      if (!esRef.current) {
-        let attempts = 0;
-        let final: any = null;
-        while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const sj = await st.json();
-          const newProgress = 45 + (sj.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (sj.status === "completed") {
-            final = sj;
-            break;
-          }
-          if (sj.status === "failed") {
-            throw new Error(sj.error || "Analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
-          attempts += 1;
+      let attempts = 0;
+      let final: any = null;
+      while (attempts < 60) {
+        const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!st.ok) {
+          throw new Error("Failed to fetch analysis status");
         }
-        if (!final) throw new Error("Analysis timeout");
-        setResult(final);
-        setProgressStage("Analysis complete!");
+        const sj = await st.json();
+        const newProgress = 45 + (sj.progress || 0) * 0.55;
+        setProgress(newProgress);
+        if (sj.status === "completed") {
+          final = sj;
+          break;
+        }
+        if (sj.status === "failed") {
+          throw new Error(sj.error || "Analysis failed");
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+        attempts += 1;
       }
+      if (!final) throw new Error("Analysis timeout");
+      setResult(final);
+      setProgressStage("Analysis complete!");
     } catch (err: any) {
       setError(err?.message || "Request failed");
     } finally {
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
       setLoading(false);
     }
   };
