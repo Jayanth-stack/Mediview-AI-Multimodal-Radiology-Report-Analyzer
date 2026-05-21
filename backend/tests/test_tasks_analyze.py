@@ -22,17 +22,31 @@ class _FakeS3:
 
 
 class _FakeGemini:
+    def __init__(self):
+        self.vector_store = None
+
+    def set_vector_store(self, vector_store):
+        self.vector_store = vector_store
+
     def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
-            ],
-            "summary": "Opacity at left base.",
-        }
+        raise AssertionError("Celery task must use sync byte analysis APIs")
+
+    def classify_bytes_with_rag(self, image_bytes):
+        self.image_bytes = image_bytes
+        return [{"label": "left basilar opacity", "confidence": 0.91}]
+
+    def summarize_text(self, text):
+        return "Opacity at left base."
+
+    def _generate_findings_summary(self, findings):
+        return "Generated summary."
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def set_vector_store(self, vector_store):
+        pass
+
+    def classify_bytes_with_rag(self, image_bytes):
         raise RuntimeError("Gemini unavailable")
 
 
