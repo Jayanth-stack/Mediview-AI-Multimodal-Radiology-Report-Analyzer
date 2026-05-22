@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-import mimetypes
 
 from app.tasks.celery_app import celery_app
 from app.db.session import get_session
@@ -11,6 +10,17 @@ from app.services.storage import get_s3_storage
 from app.core.config import settings
 import redis as redis_sync  # type: ignore
 import json
+
+
+def _dump_finding(finding) -> dict:
+    if hasattr(finding, "model_dump"):
+        return finding.model_dump(exclude_none=True)
+    if isinstance(finding, dict):
+        return {key: value for key, value in finding.items() if value is not None}
+    return {
+        "label": getattr(finding, "label", ""),
+        "confidence": getattr(finding, "confidence", 0.0),
+    }
 
 
 @celery_app.task(name="analyze_task")
@@ -47,8 +57,6 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         # Load image bytes from object storage
         s3 = get_s3_storage()
         image_bytes = s3.get_object_bytes(s3_key)
-        mime, _ = mimetypes.guess_type(s3_key)
-        mime = mime or "image/png"
         publish({"status": job.status, "progress": 20, "step": "image_loaded"})
 
         findings: list[dict] = []
@@ -57,9 +65,14 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
-            findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
-            summary = str(out.get("summary", "")).strip()
+            parsed_findings = gemini.classify_bytes_with_rag(image_bytes)
+            findings = [_dump_finding(finding) for finding in parsed_findings]
+            if report_text:
+                summary = gemini.summarize_text(report_text).strip()
+            if not summary and parsed_findings:
+                summary = gemini._generate_findings_summary(parsed_findings)
+            if not summary:
+                summary = "Automated analysis complete. Review findings and images."
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})
         except Exception:
             # Fallback stub if Gemini not configured/available
