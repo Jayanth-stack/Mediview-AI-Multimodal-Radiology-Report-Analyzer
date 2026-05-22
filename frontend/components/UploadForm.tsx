@@ -24,6 +24,52 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
   const esRef = useRef<EventSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const closeEventSource = useCallback(() => {
+    esRef.current?.close();
+    esRef.current = null;
+  }, []);
+
+  const pollJob = useCallback(async (jid: string, token: string) => {
+    let completed = false;
+    try {
+      let attempts = 0;
+      let final: any = null;
+      while (attempts < 60) {
+        const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!st.ok) throw new Error("Failed to load analysis status");
+        const sj = await st.json();
+        const newProgress = 45 + (sj.progress || 0) * 0.55;
+        setProgress(newProgress);
+        if (sj.status === "completed") {
+          final = sj;
+          break;
+        }
+        if (sj.status === "failed") {
+          throw new Error(sj.error || "Analysis failed");
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+        attempts += 1;
+      }
+      if (!final) throw new Error("Analysis timeout");
+      completed = true;
+      setResult(final);
+      setProgressStage("Analysis complete!");
+    } catch (err: any) {
+      setError(err?.message || "Request failed");
+    } finally {
+      setJobId(null);
+      if (!completed) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => closeEventSource();
+  }, [closeEventSource]);
+
   // Generate file preview
   useEffect(() => {
     if (file) {
@@ -68,6 +114,7 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       return;
     }
 
+    closeEventSource();
     setLoading(true);
     setProgress(0);
     setProgressStage("Preparing upload...");
@@ -123,6 +170,14 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
       // 4) SSE or Polling
       setProgressStage("Running AI analysis...");
       try {
+        let fallbackStarted = false;
+        const startFallbackPolling = () => {
+          if (fallbackStarted) return;
+          fallbackStarted = true;
+          closeEventSource();
+          void pollJob(jid, token);
+        };
+
         const es = new EventSource(
           `${backendUrl}/api/jobs/${jid}/events?token=${token}`
         );
@@ -134,50 +189,22 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
           if (data.status === "completed") {
             setResult(data);
             setProgressStage("Analysis complete!");
-            es.close();
-            esRef.current = null;
+            closeEventSource();
+            setJobId(null);
           } else if (data.status === "failed") {
             setError(data.error || "Analysis failed");
-            es.close();
-            esRef.current = null;
+            closeEventSource();
+            setJobId(null);
+            setLoading(false);
           }
         });
-        es.onerror = () => {
-          es.close();
-          esRef.current = null;
-        };
+        es.onerror = startFallbackPolling;
       } catch {
-        // Fallback polling
-      }
-
-      // Fallback polling
-      if (!esRef.current) {
-        let attempts = 0;
-        let final: any = null;
-        while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const sj = await st.json();
-          const newProgress = 45 + (sj.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (sj.status === "completed") {
-            final = sj;
-            break;
-          }
-          if (sj.status === "failed") {
-            throw new Error(sj.error || "Analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
-          attempts += 1;
-        }
-        if (!final) throw new Error("Analysis timeout");
-        setResult(final);
-        setProgressStage("Analysis complete!");
+        await pollJob(jid, token);
       }
     } catch (err: any) {
       setError(err?.message || "Request failed");
-    } finally {
+      setJobId(null);
       setLoading(false);
     }
   };
@@ -199,6 +226,8 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
           onAnalysisComplete(studyData);
         } catch (err: any) {
           setError(err.message || "Failed to load study");
+        } finally {
+          setLoading(false);
         }
       })();
     }

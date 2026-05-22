@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.db.models import Finding, Job, Study
+from app.schemas.entities import Finding as GeminiFinding
 from app.tasks import analyze as analyze_module
 from tests.utils import build_test_db
 
@@ -22,17 +23,22 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
-            ],
-            "summary": "Opacity at left base.",
-        }
+    def classify_bytes_with_rag(self, image_bytes: bytes):
+        if image_bytes != b"fake-image-bytes":
+            raise AssertionError("task did not pass downloaded image bytes")
+        return [GeminiFinding(label="left basilar opacity", confidence=0.91)]
+
+    def summarize_text(self, report_text: str):
+        if report_text != "short history":
+            raise AssertionError("task did not pass report text")
+        return "Opacity at left base."
+
+    def _generate_findings_summary(self, findings):
+        return "Generated from findings."
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def classify_bytes_with_rag(self, image_bytes: bytes):
         raise RuntimeError("Gemini unavailable")
 
 
