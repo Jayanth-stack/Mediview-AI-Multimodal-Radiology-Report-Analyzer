@@ -47,6 +47,28 @@ class StorageServiceTests(unittest.TestCase):
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
 
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/view"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/view")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": storage._bucket, "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
         public_client = Mock()
@@ -122,6 +144,32 @@ class GeminiServiceTests(unittest.TestCase):
             ]
         )
         self.assertIn("left lower lobe opacity", summary)
+
+    def test_analyze_bytes_returns_real_findings_when_enabled(self):
+        fake_settings = SimpleNamespace(
+            GEMINI_API_KEY="key",
+            GEMINI_MODEL="gemini-model",
+            GEMINI_VISION_MODEL="gemini-vision-model",
+            RAG_ENABLED=True,
+            RAG_TOP_K=5,
+        )
+        with (
+            patch("app.services.gemini.settings", fake_settings),
+            patch("app.services.gemini.genai.configure"),
+            patch("app.services.gemini.genai.GenerativeModel"),
+        ):
+            service = GeminiService()
+            service.classify_bytes_with_rag = Mock(
+                return_value=[Finding(label="left lower lobe opacity", confidence=0.93)]
+            )
+            service.summarize_text = Mock(return_value="Opacity at left base.")
+
+        out = service.analyze_bytes(b"image-bytes", report_text="clinical history")
+
+        self.assertEqual(out.summary, "Opacity at left base.")
+        self.assertEqual(out.findings[0].label, "left lower lobe opacity")
+        service.classify_bytes_with_rag.assert_called_once_with(b"image-bytes")
+        service.summarize_text.assert_called_once_with("clinical history")
 
 
 class VectorStoreTests(unittest.TestCase):
