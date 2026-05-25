@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-import mimetypes
 
 from app.tasks.celery_app import celery_app
 from app.db.session import get_session
@@ -11,6 +10,18 @@ from app.services.storage import get_s3_storage
 from app.core.config import settings
 import redis as redis_sync  # type: ignore
 import json
+
+
+def _finding_to_dict(finding) -> dict:
+    if hasattr(finding, "model_dump"):
+        return finding.model_dump()
+    if isinstance(finding, dict):
+        return finding
+    return {
+        "label": getattr(finding, "label", ""),
+        "confidence": getattr(finding, "confidence", 0.0),
+        "bbox": getattr(finding, "bbox", None),
+    }
 
 
 @celery_app.task(name="analyze_task")
@@ -38,7 +49,12 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         publish({"status": job.status, "progress": job.progress, "step": "started"})
 
         # Create a Study row for this upload
-        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key)
+        study = Study(
+            user_id=job.user_id,
+            patient_id="unknown",
+            modality="unknown",
+            image_s3_key=s3_key,
+        )
         session.add(study)
         session.commit()
         session.refresh(study)
@@ -47,8 +63,6 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         # Load image bytes from object storage
         s3 = get_s3_storage()
         image_bytes = s3.get_object_bytes(s3_key)
-        mime, _ = mimetypes.guess_type(s3_key)
-        mime = mime or "image/png"
         publish({"status": job.status, "progress": 20, "step": "image_loaded"})
 
         findings: list[dict] = []
@@ -57,9 +71,13 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
-            findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
-            summary = str(out.get("summary", "")).strip()
+            raw_findings = gemini.classify_bytes_with_rag(image_bytes)
+            findings = [_finding_to_dict(finding) for finding in raw_findings]
+            summary = gemini.summarize_text(report_text or "").strip() if report_text else ""
+            if not summary and raw_findings:
+                summary = gemini._generate_findings_summary(raw_findings)
+            if not summary:
+                summary = "Automated analysis complete. Review findings and images."
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})
         except Exception:
             # Fallback stub if Gemini not configured/available

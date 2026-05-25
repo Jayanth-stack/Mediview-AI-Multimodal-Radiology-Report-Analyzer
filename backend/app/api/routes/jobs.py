@@ -25,6 +25,10 @@ class JobStatus(BaseModel):
     result: Optional[dict] = None
 
 
+def _can_access_job(job: Job, user: User) -> bool:
+    return bool(user.is_superuser or (job.user_id is not None and job.user_id == user.id))
+
+
 @router.get("/{job_id}", response_model=JobStatus)
 def get_job(
     job_id: str,
@@ -34,6 +38,8 @@ def get_job(
     try:
         job = session.get(Job, job_id)
         if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        if not _can_access_job(job, current_user):
             raise HTTPException(status_code=404, detail="job not found")
         return JobStatus(
             id=job.id,
@@ -61,7 +67,8 @@ async def job_events(
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except (JWTError, Exception):
+        user_id_int = int(user_id)
+    except (JWTError, ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     async def event_gen():
@@ -74,6 +81,10 @@ async def job_events(
             try:
                 job = session.get(Job, job_id)
                 if not job:
+                    yield {"event": "error", "data": json.dumps({"error": "not_found"})}
+                    break
+                current_user = session.get(User, user_id_int)
+                if not current_user or not _can_access_job(job, current_user):
                     yield {"event": "error", "data": json.dumps({"error": "not_found"})}
                     break
                 if job.progress != last_progress or job.status != last_status:

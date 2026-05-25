@@ -32,7 +32,7 @@ def presign(
     s3=Depends(get_s3_storage),
     current_user=Depends(deps.get_current_user),
 ) -> PresignResponse:
-    key = f"uploads/{uuid4().hex}-{body.filename}"
+    key = f"uploads/{current_user.id}/{uuid4().hex}-{body.filename}"
     if body.use_post:
         post = s3.generate_presigned_post(key=key, content_type=body.content_type)
         return PresignResponse(key=key, method="POST", url=post["url"], fields=post["fields"])
