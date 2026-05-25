@@ -31,12 +31,13 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials",
             )
-    except (JWTError, ValidationError):
+        user_id_int = int(user_id)
+    except (JWTError, ValidationError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    user = session.get(User, int(user_id))
+    user = session.get(User, user_id_int)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
