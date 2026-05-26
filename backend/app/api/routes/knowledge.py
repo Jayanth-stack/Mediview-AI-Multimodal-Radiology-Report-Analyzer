@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api import deps
+from app.db.models import User
 from app.db.session import get_db
 from app.services.vector_store import get_vector_store, VectorStore
 
@@ -59,6 +61,7 @@ def get_vector_store_dep(db: Session = Depends(get_db)) -> VectorStore:
 @router.post("/documents", response_model=DocumentResponse)
 async def add_document(
     doc: DocumentCreate,
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Add a new document to the knowledge base.
@@ -91,6 +94,7 @@ async def upload_document(
     title: str = Form(...),
     source: str = Form(...),
     doc_type: str = Form(...),
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Upload a text file to the knowledge base.
@@ -125,6 +129,7 @@ async def upload_document(
 async def search_knowledge(
     query: str,
     limit: int = 5,
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Search the knowledge base using semantic similarity.
@@ -149,6 +154,7 @@ async def search_knowledge(
 async def list_documents(
     limit: int = 50,
     offset: int = 0,
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """List all documents in the knowledge base."""
@@ -169,6 +175,7 @@ async def list_documents(
 @router.get("/documents/{doc_id}")
 async def get_document(
     doc_id: int,
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Get a specific document by ID."""
@@ -190,6 +197,7 @@ async def get_document(
 @router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: int,
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Delete a document from the knowledge base."""
@@ -201,6 +209,7 @@ async def delete_document(
 
 @router.get("/stats", response_model=KnowledgeStatsResponse)
 async def get_stats(
+    current_user: User = Depends(deps.get_current_user),
     vector_store: VectorStore = Depends(get_vector_store_dep)
 ):
     """Get knowledge base statistics."""
