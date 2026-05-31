@@ -37,8 +37,13 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         session.commit()
         publish({"status": job.status, "progress": job.progress, "step": "started"})
 
-        # Create a Study row for this upload
-        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key)
+        # Tie derived study records to the job owner so study IDs are not cross-user readable.
+        study = Study(
+            user_id=job.user_id,
+            patient_id="unknown",
+            modality="unknown",
+            image_s3_key=s3_key,
+        )
         session.add(study)
         session.commit()
         session.refresh(study)
