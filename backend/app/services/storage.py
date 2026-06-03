@@ -51,6 +51,14 @@ class S3Storage:
             ExpiresIn=expires_seconds,
         )
 
+    def generate_presigned_get(self, key: str, expires_seconds: int = 3600) -> str:
+        # Use public client so browser-rendered study images are reachable.
+        return self._public_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": self._bucket, "Key": key},
+            ExpiresIn=expires_seconds,
+        )
+
     def generate_presigned_post(
         self, key: str, content_type: str, expires_seconds: int = 3600, max_size_mb: int = 50
     ) -> dict:
