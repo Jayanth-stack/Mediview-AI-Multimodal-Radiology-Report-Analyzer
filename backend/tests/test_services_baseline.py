@@ -127,6 +127,23 @@ class GeminiServiceTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].label, "analysis completed - manual review recommended")
 
+    def test_analyze_bytes_returns_stub_when_gemini_disabled(self):
+        fake_settings = SimpleNamespace(
+            GEMINI_API_KEY=None,
+            GEMINI_MODEL="gemini-model",
+            GEMINI_VISION_MODEL="gemini-vision-model",
+            RAG_ENABLED=True,
+            RAG_TOP_K=5,
+        )
+        with patch("app.services.gemini.settings", fake_settings):
+            service = GeminiService()
+
+        out = service.analyze_bytes(b"image-bytes", report_text="clinical report")
+
+        self.assertEqual(out.summary, "No Gemini API key configured; returning stubbed summary.")
+        self.assertEqual(len(out.findings), 1)
+        self.assertEqual(out.findings[0].label, "possible_abnormality")
+
     def test_generate_findings_summary_prefers_high_confidence_findings(self):
         fake_settings = SimpleNamespace(
             GEMINI_API_KEY=None,

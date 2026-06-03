@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.db.models import Finding, Job, Study
+from app.schemas.entities import AnalysisResponse, Finding as SchemaFinding
 from app.tasks import analyze as analyze_module
 from tests.utils import build_test_db
 
@@ -22,16 +23,26 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
+    def __init__(self):
+        self.calls = []
+
+    def analyze_bytes(self, **kwargs):
+        self.calls.append(kwargs)
+        return AnalysisResponse(
+            findings=[
+                SchemaFinding(label="left basilar opacity", confidence=0.91),
             ],
-            "summary": "Opacity at left base.",
-        }
+            summary="Opacity at left base.",
+        )
+
+    def analyze(self, **kwargs):
+        raise AssertionError("analyze_task must use the sync analyze_bytes API")
 
 
 class _FailingGemini:
+    def analyze_bytes(self, **kwargs):
+        raise RuntimeError("Gemini unavailable")
+
     def analyze(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
@@ -54,11 +65,12 @@ class AnalyzeTaskTests(unittest.TestCase):
     def test_analyze_task_success_path_persists_results(self):
         self._seed_job("job-success")
         fake_publisher = _FakePublisher()
+        fake_gemini = _FakeGemini()
 
         with (
             patch("app.tasks.analyze.get_session", side_effect=self.SessionLocal),
             patch("app.tasks.analyze.get_s3_storage", return_value=_FakeS3()),
-            patch("app.tasks.analyze.get_gemini_service", return_value=_FakeGemini()),
+            patch("app.tasks.analyze.get_gemini_service", return_value=fake_gemini),
             patch("app.tasks.analyze.redis_sync.from_url", return_value=fake_publisher),
         ):
             analyze_module.analyze_task.run(
@@ -85,6 +97,10 @@ class AnalyzeTaskTests(unittest.TestCase):
             session.close()
 
         self.assertGreater(len(fake_publisher.events), 0)
+        self.assertEqual(
+            fake_gemini.calls,
+            [{"image_bytes": b"fake-image-bytes", "report_text": "short history"}],
+        )
 
     def test_analyze_task_falls_back_to_stub_findings_when_gemini_fails(self):
         self._seed_job("job-fallback")
