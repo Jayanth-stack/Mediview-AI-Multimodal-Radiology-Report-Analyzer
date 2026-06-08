@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-import mimetypes
 
 from app.tasks.celery_app import celery_app
 from app.db.session import get_session
@@ -14,7 +13,12 @@ import json
 
 
 @celery_app.task(name="analyze_task")
-def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) -> None:
+def analyze_task(
+    job_id: str,
+    s3_key: str,
+    report_text: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> None:
     session = get_session()
     publisher = None
     try:
@@ -37,8 +41,10 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         session.commit()
         publish({"status": job.status, "progress": job.progress, "step": "started"})
 
+        owner_id = user_id if user_id is not None else job.user_id
+
         # Create a Study row for this upload
-        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key)
+        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key, user_id=owner_id)
         session.add(study)
         session.commit()
         session.refresh(study)
@@ -47,8 +53,6 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         # Load image bytes from object storage
         s3 = get_s3_storage()
         image_bytes = s3.get_object_bytes(s3_key)
-        mime, _ = mimetypes.guess_type(s3_key)
-        mime = mime or "image/png"
         publish({"status": job.status, "progress": 20, "step": "image_loaded"})
 
         findings: list[dict] = []
@@ -57,9 +61,12 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
-            findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
-            summary = str(out.get("summary", "")).strip()
+            out = gemini.analyze_bytes(image_bytes=image_bytes, report_text=report_text)
+            findings = [
+                {"label": finding.label, "confidence": finding.confidence}
+                for finding in out.findings
+            ]
+            summary = str(out.summary or "").strip()
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})
         except Exception:
             # Fallback stub if Gemini not configured/available

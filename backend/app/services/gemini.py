@@ -40,6 +40,14 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
+        return self.analyze_bytes(image_bytes, report_text)
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        report_text: Optional[str],
+    ) -> AnalysisResponse:
+        """Analyze image bytes from background jobs or other non-UploadFile callers."""
         
         if not self._enabled:
             return AnalysisResponse(
