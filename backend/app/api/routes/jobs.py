@@ -25,6 +25,11 @@ class JobStatus(BaseModel):
     result: Optional[dict] = None
 
 
+def _require_job_owner(job: Job, user_id: int) -> None:
+    if job.user_id != user_id:
+        raise HTTPException(status_code=403, detail="job not found")
+
+
 @router.get("/{job_id}", response_model=JobStatus)
 def get_job(
     job_id: str,
@@ -35,6 +40,7 @@ def get_job(
         job = session.get(Job, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
+        _require_job_owner(job, current_user.id)
         return JobStatus(
             id=job.id,
             status=job.status,
@@ -58,11 +64,21 @@ async def job_events(
     
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
+        user_id_raw = payload.get("sub")
+        if not user_id_raw:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except (JWTError, Exception):
+        user_id = int(user_id_raw)
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    session = get_session()
+    try:
+        job = session.get(Job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        _require_job_owner(job, user_id)
+    finally:
+        session.close()
 
     async def event_gen():
         last_progress = -1
