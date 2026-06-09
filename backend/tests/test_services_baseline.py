@@ -47,6 +47,29 @@ class StorageServiceTests(unittest.TestCase):
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
 
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/view"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/view")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": storage._bucket, "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+        internal_client.generate_presigned_url.assert_not_called()
+
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
         public_client = Mock()
@@ -67,15 +90,17 @@ class StorageServiceTests(unittest.TestCase):
 
 
 class GeminiServiceTests(unittest.TestCase):
-    def test_parse_findings_parses_json_bbox(self):
-        fake_settings = SimpleNamespace(
+    def _disabled_settings(self):
+        return SimpleNamespace(
             GEMINI_API_KEY=None,
             GEMINI_MODEL="gemini-model",
             GEMINI_VISION_MODEL="gemini-vision-model",
             RAG_ENABLED=True,
             RAG_TOP_K=5,
         )
-        with patch("app.services.gemini.settings", fake_settings):
+
+    def test_parse_findings_parses_json_bbox(self):
+        with patch("app.services.gemini.settings", self._disabled_settings()):
             service = GeminiService()
 
         findings = service._parse_findings(
@@ -90,14 +115,7 @@ class GeminiServiceTests(unittest.TestCase):
         self.assertEqual(findings[0].bbox.x, 11.0)
 
     def test_parse_findings_invalid_payload_returns_fallback(self):
-        fake_settings = SimpleNamespace(
-            GEMINI_API_KEY=None,
-            GEMINI_MODEL="gemini-model",
-            GEMINI_VISION_MODEL="gemini-vision-model",
-            RAG_ENABLED=True,
-            RAG_TOP_K=5,
-        )
-        with patch("app.services.gemini.settings", fake_settings):
+        with patch("app.services.gemini.settings", self._disabled_settings()):
             service = GeminiService()
 
         findings = service._parse_findings("not-json")
@@ -105,14 +123,7 @@ class GeminiServiceTests(unittest.TestCase):
         self.assertEqual(findings[0].label, "analysis completed - manual review recommended")
 
     def test_generate_findings_summary_prefers_high_confidence_findings(self):
-        fake_settings = SimpleNamespace(
-            GEMINI_API_KEY=None,
-            GEMINI_MODEL="gemini-model",
-            GEMINI_VISION_MODEL="gemini-vision-model",
-            RAG_ENABLED=True,
-            RAG_TOP_K=5,
-        )
-        with patch("app.services.gemini.settings", fake_settings):
+        with patch("app.services.gemini.settings", self._disabled_settings()):
             service = GeminiService()
 
         summary = service._generate_findings_summary(
@@ -122,6 +133,21 @@ class GeminiServiceTests(unittest.TestCase):
             ]
         )
         self.assertIn("left lower lobe opacity", summary)
+
+    def test_analyze_bytes_returns_serialized_stub_when_disabled(self):
+        with patch("app.services.gemini.settings", self._disabled_settings()):
+            service = GeminiService()
+
+        out = service.analyze_bytes(
+            image_bytes=b"raw-image",
+            mime_type="image/png",
+            report_text="history",
+            patient_context="context",
+        )
+
+        self.assertEqual(out["summary"], "No Gemini API key configured; returning stubbed summary.")
+        self.assertEqual(out["findings"][0]["label"], "possible_abnormality")
+        self.assertEqual(out["findings"][0]["confidence"], 0.42)
 
 
 class VectorStoreTests(unittest.TestCase):
