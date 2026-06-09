@@ -57,7 +57,11 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
+            out = gemini.analyze_bytes(
+                image_bytes=image_bytes,
+                mime_type=mime,
+                report_text=report_text,
+            )
             findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
             summary = str(out.get("summary", "")).strip()
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})

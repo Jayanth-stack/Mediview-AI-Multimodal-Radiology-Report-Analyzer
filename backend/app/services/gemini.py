@@ -40,7 +40,21 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
-        
+        result = self.analyze_bytes(
+            image_bytes=image_bytes,
+            report_text=report_text,
+            patient_context=patient_context,
+        )
+        return AnalysisResponse(**result)
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        mime_type: Optional[str] = None,
+        report_text: Optional[str] = None,
+        patient_context: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Analyze already-loaded image bytes from synchronous workers."""
         if not self._enabled:
             return AnalysisResponse(
                 summary="No Gemini API key configured; returning stubbed summary.",
@@ -48,7 +62,7 @@ class GeminiService:
                     Finding(label="possible_abnormality", confidence=0.42),
                 ],
                 notes="Configure GEMINI_API_KEY env to enable real inference.",
-            )
+            ).model_dump()
 
         # Run analysis with optional RAG context
         findings = self.classify_bytes_with_rag(image_bytes)
@@ -63,7 +77,7 @@ class GeminiService:
             summary_text = self._generate_findings_summary(findings)
         
         final_summary = summary_text or "Automated analysis complete. Review findings and images."
-        return AnalysisResponse(summary=final_summary, findings=findings, notes=None)
+        return AnalysisResponse(summary=final_summary, findings=findings, notes=None).model_dump()
     
     def _retrieve_context(self, query: str) -> str:
         """Retrieve relevant medical knowledge based on query.

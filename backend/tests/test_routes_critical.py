@@ -4,10 +4,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from fastapi import HTTPException
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -94,6 +96,16 @@ class CriticalRouteTests(unittest.TestCase):
         self.assertTrue(out.key.startswith("uploads/"))
         self.assertTrue(out.key.endswith("-xray.png"))
 
+    def test_knowledge_routes_require_auth_before_document_access(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+        client = TestClient(app)
+
+        response = client.delete("/api/knowledge/documents/123")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Not authenticated")
+
     def test_analyze_start_creates_job_and_dispatches_task(self):
         with (
             patch("app.api.routes.analyze_job.get_session", side_effect=self.SessionLocal),
@@ -172,13 +184,14 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = Mock()
+            fake_s3.generate_presigned_get.return_value = "https://signed.example/study-view"
 
             out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
         finally:
             session.close()
 
+        fake_s3.generate_presigned_get.assert_called_once_with("uploads/xray.png")
         self.assertEqual(out.id, study.id)
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
@@ -190,7 +203,7 @@ class CriticalRouteTests(unittest.TestCase):
     def test_studies_get_study_not_found(self):
         session = self.SessionLocal()
         try:
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
+            fake_s3 = Mock()
             with self.assertRaises(HTTPException) as ctx:
                 studies.get_study(study_id=9999, session=session, s3=fake_s3, current_user=object())
         finally:
