@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import ast
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+MIGRATIONS_DIR = BACKEND_DIR / "alembic" / "versions"
 
 
 def _string_assignment(module_path: Path, name: str) -> str:
@@ -22,9 +25,9 @@ def _string_assignment(module_path: Path, name: str) -> str:
 
 
 class CriticalMigrationTests(unittest.TestCase):
-    def test_documents_migration_revises_existing_findings_revision(self):
-        findings_revision = _string_assignment(
-            MIGRATIONS_DIR / "0003_add_findings_extra.py",
+    def test_documents_migration_revises_user_model_revision(self):
+        user_model_revision = _string_assignment(
+            MIGRATIONS_DIR / "2a5f7141d494_add_user_model.py",
             "revision",
         )
         documents_down_revision = _string_assignment(
@@ -32,7 +35,19 @@ class CriticalMigrationTests(unittest.TestCase):
             "down_revision",
         )
 
-        self.assertEqual(documents_down_revision, findings_revision)
+        self.assertEqual(documents_down_revision, user_model_revision)
+
+    def test_alembic_has_single_head(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "heads"],
+            cwd=BACKEND_DIR,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        heads = [line for line in result.stdout.splitlines() if "(head)" in line]
+        self.assertEqual(heads, ["0004_add_documents_table (head)"])
 
 
 if __name__ == "__main__":
