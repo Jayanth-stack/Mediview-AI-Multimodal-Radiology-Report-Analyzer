@@ -40,6 +40,19 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
+        return self.analyze_bytes(
+            image_bytes=image_bytes,
+            report_text=report_text,
+            patient_context=patient_context,
+        )
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        report_text: Optional[str] = None,
+        patient_context: Optional[str] = None,
+    ) -> AnalysisResponse:
+        del patient_context
         
         if not self._enabled:
             return AnalysisResponse(
@@ -50,15 +63,12 @@ class GeminiService:
                 notes="Configure GEMINI_API_KEY env to enable real inference.",
             )
 
-        # Run analysis with optional RAG context
         findings = self.classify_bytes_with_rag(image_bytes)
         
-        # Summarize report text if provided
         summary_text = ""
         if report_text:
             summary_text = self.summarize_text(report_text)
         
-        # If no summary from report, generate one from findings
         if not summary_text and findings:
             summary_text = self._generate_findings_summary(findings)
         

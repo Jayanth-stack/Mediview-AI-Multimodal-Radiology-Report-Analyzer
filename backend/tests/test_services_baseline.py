@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
+import asyncio
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from PIL import Image
 
@@ -46,6 +47,29 @@ class StorageServiceTests(unittest.TestCase):
 
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
+
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/view"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/view")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": storage._bucket, "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+        internal_client.generate_presigned_url.assert_not_called()
 
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
@@ -122,6 +146,32 @@ class GeminiServiceTests(unittest.TestCase):
             ]
         )
         self.assertIn("left lower lobe opacity", summary)
+
+    def test_analyze_uploadfile_reuses_byte_analysis(self):
+        fake_settings = SimpleNamespace(
+            GEMINI_API_KEY=None,
+            GEMINI_MODEL="gemini-model",
+            GEMINI_VISION_MODEL="gemini-vision-model",
+            RAG_ENABLED=True,
+            RAG_TOP_K=5,
+        )
+        with patch("app.services.gemini.settings", fake_settings):
+            service = GeminiService()
+
+        image = SimpleNamespace(read=AsyncMock(return_value=b"image-bytes"))
+
+        async def _run():
+            return await service.analyze(image=image, report_text="report", patient_context="context")
+
+        with patch.object(service, "analyze_bytes", wraps=service.analyze_bytes) as analyze_bytes:
+            out = asyncio.run(_run())
+
+        analyze_bytes.assert_called_once_with(
+            image_bytes=b"image-bytes",
+            report_text="report",
+            patient_context="context",
+        )
+        self.assertEqual(out.findings[0].label, "possible_abnormality")
 
 
 class VectorStoreTests(unittest.TestCase):
