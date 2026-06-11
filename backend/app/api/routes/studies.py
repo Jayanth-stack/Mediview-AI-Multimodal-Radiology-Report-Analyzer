@@ -56,16 +56,12 @@ def get_study(
     
     out_findings = []
     for f in findings:
-        # Stub bbox for demo - in real app this would come from DB or JSON extra field
-        bbox = Bbox(x=100, y=100, width=200, height=150)
+        bbox_data = f.extra.get("bbox") if isinstance(f.extra, dict) else None
+        bbox = Bbox(**bbox_data) if isinstance(bbox_data, dict) else Bbox(x=100, y=100, width=200, height=150)
         out_findings.append(FindingOut(id=f.id, label=f.label, confidence=f.confidence, bbox=bbox))
         
     try:
-        image_url = s3._client.generate_presigned_url(
-            "get_object", 
-            Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, 
-            ExpiresIn=3600
-        )
+        image_url = s3.generate_presigned_get(study.image_s3_key, expires_seconds=3600)
     except Exception as e:
         print(f"Error generating presigned url: {e}")
         image_url = ""

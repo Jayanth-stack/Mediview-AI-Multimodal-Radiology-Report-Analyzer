@@ -12,6 +12,11 @@ interface FindingsDrawerProps {
   onHover: (id: number, isHovering: boolean) => void;
 }
 
+function formatConfidence(confidence: number): string {
+  const percentage = confidence <= 1 ? confidence * 100 : confidence;
+  return `${Math.round(percentage)}%`;
+}
+
 export default function FindingsDrawer({ isOpen, findings, onHover }: FindingsDrawerProps) {
   return (
     <AnimatePresence>
@@ -32,7 +37,7 @@ export default function FindingsDrawer({ isOpen, findings, onHover }: FindingsDr
                 onHoverEnd={() => onHover(f.id, false)}
                 className="p-4 border-b"
               >
-                {f.label} ({f.confidence}%)
+                {f.label} ({formatConfidence(f.confidence)})
               </motion.li>
             ))}
           </ul>

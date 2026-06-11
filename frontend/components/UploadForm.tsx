@@ -72,6 +72,28 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
     setProgress(0);
     setProgressStage("Preparing upload...");
 
+    const pollJob = async (jid: string, authToken: string) => {
+      let attempts = 0;
+      while (attempts < 60) {
+        const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!st.ok) throw new Error("Failed to load analysis status");
+        const sj = await st.json();
+        const newProgress = 45 + (sj.progress || 0) * 0.55;
+        setProgress(newProgress);
+        if (sj.status === "completed") {
+          return sj;
+        }
+        if (sj.status === "failed") {
+          throw new Error(sj.error || "Analysis failed");
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+        attempts += 1;
+      }
+      throw new Error("Analysis timeout");
+    };
+
     try {
       // 1) Presign
       setProgressStage("Getting upload credentials...");
@@ -122,59 +144,50 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
 
       // 4) SSE or Polling
       setProgressStage("Running AI analysis...");
-      try {
-        const es = new EventSource(
-          `${backendUrl}/api/jobs/${jid}/events?token=${token}`
-        );
-        esRef.current = es;
-        es.addEventListener("progress", (ev: MessageEvent) => {
-          const data = JSON.parse(ev.data);
-          const newProgress = 45 + (data.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (data.status === "completed") {
-            setResult(data);
-            setProgressStage("Analysis complete!");
-            es.close();
-            esRef.current = null;
-          } else if (data.status === "failed") {
-            setError(data.error || "Analysis failed");
-            es.close();
-            esRef.current = null;
-          }
-        });
-        es.onerror = () => {
-          es.close();
+      const final = await new Promise<any>((resolve, reject) => {
+        let settled = false;
+        const closeStream = () => {
+          esRef.current?.close();
           esRef.current = null;
         };
-      } catch {
-        // Fallback polling
-      }
+        const settle = (callback: () => void) => {
+          if (settled) return;
+          settled = true;
+          closeStream();
+          callback();
+        };
 
-      // Fallback polling
-      if (!esRef.current) {
-        let attempts = 0;
-        let final: any = null;
-        while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
-            headers: { Authorization: `Bearer ${token}` },
+        try {
+          const es = new EventSource(
+            `${backendUrl}/api/jobs/${jid}/events?token=${token}`
+          );
+          esRef.current = es;
+          es.addEventListener("progress", (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data);
+              const newProgress = 45 + (data.progress || 0) * 0.55;
+              setProgress(newProgress);
+              if (data.status === "completed") {
+                settle(() => resolve(data));
+              } else if (data.status === "failed") {
+                settle(() => reject(new Error(data.error || "Analysis failed")));
+              }
+            } catch (err) {
+              settle(() => reject(err));
+            }
           });
-          const sj = await st.json();
-          const newProgress = 45 + (sj.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (sj.status === "completed") {
-            final = sj;
-            break;
-          }
-          if (sj.status === "failed") {
-            throw new Error(sj.error || "Analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
-          attempts += 1;
+          es.onerror = () => {
+            if (settled) return;
+            closeStream();
+            setProgressStage("Connection interrupted; checking status...");
+            pollJob(jid, token).then(resolve).catch(reject);
+          };
+        } catch {
+          pollJob(jid, token).then(resolve).catch(reject);
         }
-        if (!final) throw new Error("Analysis timeout");
-        setResult(final);
-        setProgressStage("Analysis complete!");
-      }
+      });
+      setResult(final);
+      setProgressStage("Analysis complete!");
     } catch (err: any) {
       setError(err?.message || "Request failed");
     } finally {

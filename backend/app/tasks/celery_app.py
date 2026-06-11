@@ -22,3 +22,4 @@ celery_app.conf.task_default_queue = "analyze"
 celery_app.conf.task_default_exchange = "analyze"
 celery_app.conf.task_default_routing_key = "analyze"
 
+from app.tasks import analyze  # noqa: E402,F401
