@@ -4,7 +4,10 @@ import unittest
 from unittest.mock import patch
 
 from app.db.models import Finding, Job, Study
+from app.schemas.entities import AnalysisResponse, BoundingBox
+from app.schemas.entities import Finding as FindingSchema
 from app.tasks import analyze as analyze_module
+from app.tasks.celery_app import celery_app
 from tests.utils import build_test_db
 
 
@@ -22,17 +25,21 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
+    def analyze_bytes(self, image_bytes: bytes, report_text: str | None = None):
+        return AnalysisResponse(
+            findings=[
+                FindingSchema(
+                    label="left basilar opacity",
+                    confidence=0.91,
+                    bbox=BoundingBox(x=11, y=22, width=33, height=44),
+                ),
             ],
-            "summary": "Opacity at left base.",
-        }
+            summary="Opacity at left base.",
+        )
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, image_bytes: bytes, report_text: str | None = None):
         raise RuntimeError("Gemini unavailable")
 
 
@@ -81,13 +88,14 @@ class AnalyzeTaskTests(unittest.TestCase):
             self.assertEqual(len(studies), 1)
             self.assertEqual(len(findings), 1)
             self.assertEqual(findings[0].label, "left basilar opacity")
+            self.assertEqual(findings[0].extra["bbox"]["x"], 11.0)
         finally:
             session.close()
 
         self.assertGreater(len(fake_publisher.events), 0)
 
-    def test_analyze_task_falls_back_to_stub_findings_when_gemini_fails(self):
-        self._seed_job("job-fallback")
+    def test_analyze_task_marks_job_failed_when_gemini_interface_fails(self):
+        self._seed_job("job-failed")
 
         with (
             patch("app.tasks.analyze.get_session", side_effect=self.SessionLocal),
@@ -96,20 +104,17 @@ class AnalyzeTaskTests(unittest.TestCase):
             patch("app.tasks.analyze.redis_sync.from_url", side_effect=RuntimeError("redis down")),
         ):
             analyze_module.analyze_task.run(
-                job_id="job-fallback",
+                job_id="job-failed",
                 s3_key="uploads/b.png",
                 report_text=None,
             )
 
         session = self.SessionLocal()
         try:
-            job = session.get(Job, "job-fallback")
+            job = session.get(Job, "job-failed")
             self.assertIsNotNone(job)
-            self.assertEqual(job.status, "completed")
-            self.assertEqual(job.progress, 100)
-            self.assertEqual(job.result["summary"], "Automated analysis complete (stub).")
-            self.assertEqual(job.result["findings"][0]["label"], "possible_abnormality")
-            self.assertEqual(job.result["s3_key"], "uploads/b.png")
+            self.assertEqual(job.status, "failed")
+            self.assertEqual(job.error, "Gemini unavailable")
         finally:
             session.close()
 
@@ -132,6 +137,9 @@ class AnalyzeTaskTests(unittest.TestCase):
             self.assertEqual(session.query(Finding).count(), 0)
         finally:
             session.close()
+
+    def test_celery_app_registers_analyze_task_for_workers(self):
+        self.assertIn("analyze_task", celery_app.tasks)
 
 
 if __name__ == "__main__":
