@@ -65,6 +65,14 @@ class S3Storage:
             ExpiresIn=expires_seconds,
         )
 
+    def generate_presigned_get(self, key: str, expires_seconds: int = 3600) -> str:
+        # Browser-facing reads must be signed against the public endpoint.
+        return self._public_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": self._bucket, "Key": key},
+            ExpiresIn=expires_seconds,
+        )
+
     def get_object_bytes(self, key: str) -> bytes:
         obj = self._client.get_object(Bucket=self._bucket, Key=key)
         try:

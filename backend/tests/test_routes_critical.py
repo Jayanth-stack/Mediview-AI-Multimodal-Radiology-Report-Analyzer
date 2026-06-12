@@ -4,10 +4,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -172,8 +173,7 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = SimpleNamespace(generate_presigned_get=Mock(return_value="https://signed.example/study-view"))
 
             out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
         finally:
@@ -183,6 +183,7 @@ class CriticalRouteTests(unittest.TestCase):
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
         self.assertEqual(out.image_url, "https://signed.example/study-view")
+        fake_s3.generate_presigned_get.assert_called_once_with("uploads/xray.png")
         self.assertEqual(len(out.findings), 1)
         self.assertEqual(out.findings[0].label, "right lower lobe opacity")
         self.assertEqual(out.findings[0].bbox.x, 100)
@@ -198,6 +199,15 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_routes_require_authentication(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+
+        with TestClient(app) as client:
+            response = client.get("/api/knowledge/stats")
+
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":
