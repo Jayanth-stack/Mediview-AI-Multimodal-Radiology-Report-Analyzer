@@ -24,6 +24,29 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
   const esRef = useRef<EventSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const pollJob = async (jid: string, token: string) => {
+    let attempts = 0;
+    while (attempts < 60) {
+      const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!st.ok) throw new Error("Failed to load analysis status");
+
+      const sj = await st.json();
+      const newProgress = 45 + (sj.progress || 0) * 0.55;
+      setProgress(newProgress);
+      if (sj.status === "completed") {
+        return sj;
+      }
+      if (sj.status === "failed") {
+        throw new Error(sj.error || "Analysis failed");
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      attempts += 1;
+    }
+    throw new Error("Analysis timeout");
+  };
+
   // Generate file preview
   useEffect(() => {
     if (file) {
@@ -145,6 +168,19 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
         es.onerror = () => {
           es.close();
           esRef.current = null;
+          setLoading(true);
+          setProgressStage("Reconnecting to analysis status...");
+          void pollJob(jid, token)
+            .then((final) => {
+              setResult(final);
+              setProgressStage("Analysis complete!");
+            })
+            .catch((err: any) => {
+              setError(err?.message || "Analysis failed");
+            })
+            .finally(() => {
+              setLoading(false);
+            });
         };
       } catch {
         // Fallback polling
@@ -152,26 +188,7 @@ export default function UploadForm({ onAnalysisComplete }: UploadFormProps) {
 
       // Fallback polling
       if (!esRef.current) {
-        let attempts = 0;
-        let final: any = null;
-        while (attempts < 60) {
-          const st = await fetch(`${backendUrl}/api/jobs/${jid}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const sj = await st.json();
-          const newProgress = 45 + (sj.progress || 0) * 0.55;
-          setProgress(newProgress);
-          if (sj.status === "completed") {
-            final = sj;
-            break;
-          }
-          if (sj.status === "failed") {
-            throw new Error(sj.error || "Analysis failed");
-          }
-          await new Promise((r) => setTimeout(r, 1000));
-          attempts += 1;
-        }
-        if (!final) throw new Error("Analysis timeout");
+        const final = await pollJob(jid, token);
         setResult(final);
         setProgressStage("Analysis complete!");
       }

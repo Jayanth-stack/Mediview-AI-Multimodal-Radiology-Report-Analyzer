@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.db.models import Finding, Job, Study
+from app.schemas.entities import AnalysisResponse, Finding as SchemaFinding
 from app.tasks import analyze as analyze_module
 from tests.utils import build_test_db
 
@@ -22,17 +23,17 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
-        return {
-            "findings": [
-                {"label": "left basilar opacity", "confidence": 0.91},
+    def analyze_bytes(self, **kwargs):
+        return AnalysisResponse(
+            findings=[
+                SchemaFinding(label="left basilar opacity", confidence=0.91),
             ],
-            "summary": "Opacity at left base.",
-        }
+            summary="Opacity at left base.",
+        )
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
 
