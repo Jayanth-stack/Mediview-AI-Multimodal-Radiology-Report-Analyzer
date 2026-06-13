@@ -40,30 +40,49 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
-        
+
+        result = self.analyze_bytes(
+            image_bytes=image_bytes,
+            report_text=report_text,
+            patient_context=patient_context,
+        )
+        return AnalysisResponse(**result)
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        mime_type: Optional[str] = None,
+        report_text: Optional[str] = None,
+        patient_context: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Synchronous byte-based analysis entry point for Celery workers."""
         if not self._enabled:
-            return AnalysisResponse(
-                summary="No Gemini API key configured; returning stubbed summary.",
-                findings=[
-                    Finding(label="possible_abnormality", confidence=0.42),
+            return {
+                "summary": "No Gemini API key configured; returning stubbed summary.",
+                "findings": [
+                    Finding(label="possible_abnormality", confidence=0.42).model_dump(exclude_none=True),
                 ],
-                notes="Configure GEMINI_API_KEY env to enable real inference.",
-            )
+                "notes": "Configure GEMINI_API_KEY env to enable real inference.",
+            }
 
         # Run analysis with optional RAG context
         findings = self.classify_bytes_with_rag(image_bytes)
-        
+
         # Summarize report text if provided
         summary_text = ""
         if report_text:
             summary_text = self.summarize_text(report_text)
-        
+
         # If no summary from report, generate one from findings
         if not summary_text and findings:
             summary_text = self._generate_findings_summary(findings)
-        
+
         final_summary = summary_text or "Automated analysis complete. Review findings and images."
-        return AnalysisResponse(summary=final_summary, findings=findings, notes=None)
+        return {
+            "summary": final_summary,
+            "findings": [finding.model_dump(exclude_none=True) for finding in findings],
+            "notes": None,
+        }
     
     def _retrieve_context(self, query: str) -> str:
         """Retrieve relevant medical knowledge based on query.

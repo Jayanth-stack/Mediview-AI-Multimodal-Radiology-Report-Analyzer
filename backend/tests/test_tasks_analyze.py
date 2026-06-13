@@ -23,6 +23,9 @@ class _FakeS3:
 
 class _FakeGemini:
     def analyze(self, **kwargs):
+        raise AssertionError("Celery workers must use the synchronous byte API")
+
+    def analyze_bytes(self, **kwargs):
         return {
             "findings": [
                 {"label": "left basilar opacity", "confidence": 0.91},
@@ -32,7 +35,7 @@ class _FakeGemini:
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
 
