@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from fastapi import HTTPException
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -58,6 +58,10 @@ class CriticalRouteTests(unittest.TestCase):
             inspect.signature(studies.get_study).parameters["session"].default.dependency,
             db_session.get_db,
         )
+
+    def test_knowledge_routes_require_authentication(self):
+        dependencies = [dependency.dependency for dependency in knowledge.router.dependencies]
+        self.assertIn(deps.get_current_user, dependencies)
 
     def test_login_access_token_success(self):
         user = self._create_user()
