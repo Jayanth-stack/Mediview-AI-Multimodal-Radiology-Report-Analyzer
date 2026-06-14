@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import unittest
+import inspect
 from types import SimpleNamespace
+from typing import get_args
 from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
@@ -11,6 +13,8 @@ from app.api.routes import analyze_job, jobs, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
+from app.db import session as db_session
+from app.api import deps
 from tests.utils import build_test_db
 
 
@@ -37,6 +41,23 @@ class CriticalRouteTests(unittest.TestCase):
             return user
         finally:
             session.close()
+
+    def _assert_annotated_depends_on_get_db(self, func, parameter_name: str):
+        annotation = inspect.signature(func).parameters[parameter_name].annotation
+        dependencies = [
+            item.dependency
+            for item in get_args(annotation)[1:]
+            if hasattr(item, "dependency")
+        ]
+        self.assertIn(db_session.get_db, dependencies)
+
+    def test_request_db_dependencies_close_sessions(self):
+        self._assert_annotated_depends_on_get_db(deps.get_current_user, "session")
+        self._assert_annotated_depends_on_get_db(login.login_access_token, "session")
+        self.assertIs(
+            inspect.signature(studies.get_study).parameters["session"].default.dependency,
+            db_session.get_db,
+        )
 
     def test_login_access_token_success(self):
         user = self._create_user()
@@ -172,8 +193,8 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = Mock()
+            fake_s3.generate_presigned_get.return_value = "https://signed.example/study-view"
 
             out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
         finally:
@@ -183,6 +204,7 @@ class CriticalRouteTests(unittest.TestCase):
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
         self.assertEqual(out.image_url, "https://signed.example/study-view")
+        fake_s3.generate_presigned_get.assert_called_once_with("uploads/xray.png")
         self.assertEqual(len(out.findings), 1)
         self.assertEqual(out.findings[0].label, "right lower lobe opacity")
         self.assertEqual(out.findings[0].bbox.x, 100)
@@ -190,7 +212,7 @@ class CriticalRouteTests(unittest.TestCase):
     def test_studies_get_study_not_found(self):
         session = self.SessionLocal()
         try:
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
+            fake_s3 = Mock()
             with self.assertRaises(HTTPException) as ctx:
                 studies.get_study(study_id=9999, session=session, s3=fake_s3, current_user=object())
         finally:
