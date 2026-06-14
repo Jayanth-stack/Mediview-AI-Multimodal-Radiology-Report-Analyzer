@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from app.db.session import get_session
+from app.db.session import get_db
 from app.db.models import Study, Finding, Report, User
 from app.services.storage import get_s3_storage
 from app.api import deps
@@ -39,7 +39,7 @@ class StudyOut(BaseModel):
 @router.get("/{study_id}", response_model=StudyOut)
 def get_study(
     study_id: int,
-    session=Depends(get_session),
+    session=Depends(get_db),
     s3=Depends(get_s3_storage),
     current_user: User = Depends(deps.get_current_user),
 ):
@@ -61,11 +61,7 @@ def get_study(
         out_findings.append(FindingOut(id=f.id, label=f.label, confidence=f.confidence, bbox=bbox))
         
     try:
-        image_url = s3._client.generate_presigned_url(
-            "get_object", 
-            Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, 
-            ExpiresIn=3600
-        )
+        image_url = s3.generate_presigned_get(study.image_s3_key)
     except Exception as e:
         print(f"Error generating presigned url: {e}")
         image_url = ""
