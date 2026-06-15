@@ -47,6 +47,28 @@ class StorageServiceTests(unittest.TestCase):
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
 
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/view"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/view")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": "mediview", "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
         public_client = Mock()
@@ -122,6 +144,33 @@ class GeminiServiceTests(unittest.TestCase):
             ]
         )
         self.assertIn("left lower lobe opacity", summary)
+
+    def test_analyze_bytes_uses_raw_image_bytes(self):
+        fake_settings = SimpleNamespace(
+            GEMINI_API_KEY=None,
+            GEMINI_MODEL="gemini-model",
+            GEMINI_VISION_MODEL="gemini-vision-model",
+            RAG_ENABLED=True,
+            RAG_TOP_K=5,
+        )
+        with patch("app.services.gemini.settings", fake_settings):
+            service = GeminiService()
+        service._enabled = True
+        service.classify_bytes_with_rag = Mock(
+            return_value=[Finding(label="right upper lobe opacity", confidence=0.92)]
+        )
+        service.summarize_text = Mock(return_value="Suspicious right upper lobe opacity.")
+
+        out = service.analyze_bytes(
+            image_bytes=b"raw-image-bytes",
+            report_text="clinical report",
+            patient_context=None,
+        )
+
+        service.classify_bytes_with_rag.assert_called_once_with(b"raw-image-bytes")
+        service.summarize_text.assert_called_once_with("clinical report")
+        self.assertEqual(out.summary, "Suspicious right upper lobe opacity.")
+        self.assertEqual(out.findings[0].label, "right upper lobe opacity")
 
 
 class VectorStoreTests(unittest.TestCase):

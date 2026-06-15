@@ -37,7 +37,13 @@ class S3Storage:
 
     def get_bytes(self, key: str) -> bytes:
         obj = self._client.get_object(Bucket=self._bucket, Key=key)
-        return obj["Body"].read()
+        try:
+            return obj["Body"].read()
+        finally:
+            try:
+                obj["Body"].close()
+            except Exception:
+                pass
 
     # Backwards-compatible alias used by tasks
     def get_object_bytes(self, key: str) -> bytes:
@@ -65,15 +71,13 @@ class S3Storage:
             ExpiresIn=expires_seconds,
         )
 
-    def get_object_bytes(self, key: str) -> bytes:
-        obj = self._client.get_object(Bucket=self._bucket, Key=key)
-        try:
-            return obj["Body"].read()
-        finally:
-            try:
-                obj["Body"].close()
-            except Exception:
-                pass
+    def generate_presigned_get(self, key: str, expires_seconds: int = 3600) -> str:
+        # Use public client so browser can reach completed study images.
+        return self._public_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": self._bucket, "Key": key},
+            ExpiresIn=expires_seconds,
+        )
 
 
 _s3_singleton: Optional[S3Storage] = None
