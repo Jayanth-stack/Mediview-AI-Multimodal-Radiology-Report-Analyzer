@@ -22,7 +22,8 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
+        self.kwargs = kwargs
         return {
             "findings": [
                 {"label": "left basilar opacity", "confidence": 0.91},
@@ -32,7 +33,7 @@ class _FakeGemini:
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
 
@@ -54,11 +55,12 @@ class AnalyzeTaskTests(unittest.TestCase):
     def test_analyze_task_success_path_persists_results(self):
         self._seed_job("job-success")
         fake_publisher = _FakePublisher()
+        fake_gemini = _FakeGemini()
 
         with (
             patch("app.tasks.analyze.get_session", side_effect=self.SessionLocal),
             patch("app.tasks.analyze.get_s3_storage", return_value=_FakeS3()),
-            patch("app.tasks.analyze.get_gemini_service", return_value=_FakeGemini()),
+            patch("app.tasks.analyze.get_gemini_service", return_value=fake_gemini),
             patch("app.tasks.analyze.redis_sync.from_url", return_value=fake_publisher),
         ):
             analyze_module.analyze_task.run(
@@ -84,6 +86,9 @@ class AnalyzeTaskTests(unittest.TestCase):
         finally:
             session.close()
 
+        self.assertEqual(fake_gemini.kwargs["image_bytes"], b"fake-image-bytes")
+        self.assertEqual(fake_gemini.kwargs["mime_type"], "image/png")
+        self.assertEqual(fake_gemini.kwargs["report_text"], "short history")
         self.assertGreater(len(fake_publisher.events), 0)
 
     def test_analyze_task_falls_back_to_stub_findings_when_gemini_fails(self):
