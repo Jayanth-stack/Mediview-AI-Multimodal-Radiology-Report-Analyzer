@@ -47,6 +47,29 @@ class StorageServiceTests(unittest.TestCase):
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
 
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/study-view"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/study-view")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": storage._bucket, "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+        internal_client.generate_presigned_url.assert_not_called()
+
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
         public_client = Mock()
@@ -103,6 +126,23 @@ class GeminiServiceTests(unittest.TestCase):
         findings = service._parse_findings("not-json")
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].label, "analysis completed - manual review recommended")
+
+    def test_analyze_bytes_returns_stub_when_gemini_disabled(self):
+        fake_settings = SimpleNamespace(
+            GEMINI_API_KEY=None,
+            GEMINI_MODEL="gemini-model",
+            GEMINI_VISION_MODEL="gemini-vision-model",
+            RAG_ENABLED=True,
+            RAG_TOP_K=5,
+        )
+        with patch("app.services.gemini.settings", fake_settings):
+            service = GeminiService()
+
+        out = service.analyze_bytes(b"image-bytes", report_text="clinical report")
+
+        self.assertEqual(out.summary, "No Gemini API key configured; returning stubbed summary.")
+        self.assertEqual(len(out.findings), 1)
+        self.assertEqual(out.findings[0].label, "possible_abnormality")
 
     def test_generate_findings_summary_prefers_high_confidence_findings(self):
         fake_settings = SimpleNamespace(
