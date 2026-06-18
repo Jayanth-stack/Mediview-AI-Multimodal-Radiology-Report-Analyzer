@@ -11,6 +11,7 @@ from app.api.routes import analyze_job, jobs, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
+from app.services.storage import S3Storage
 from tests.utils import build_test_db
 
 
@@ -93,6 +94,23 @@ class CriticalRouteTests(unittest.TestCase):
         self.assertEqual(out.fields, {"key": "value"})
         self.assertTrue(out.key.startswith("uploads/"))
         self.assertTrue(out.key.endswith("-xray.png"))
+
+    def test_s3_presigned_get_uses_public_client(self):
+        storage = object.__new__(S3Storage)
+        storage._client = Mock()
+        storage._public_client = Mock()
+        storage._bucket = "mediview"
+        storage._public_client.generate_presigned_url.return_value = "http://localhost:9000/signed"
+
+        url = storage.generate_presigned_get("uploads/xray.png")
+
+        self.assertEqual(url, "http://localhost:9000/signed")
+        storage._public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": "mediview", "Key": "uploads/xray.png"},
+            ExpiresIn=3600,
+        )
+        storage._client.generate_presigned_url.assert_not_called()
 
     def test_analyze_start_creates_job_and_dispatches_task(self):
         with (
