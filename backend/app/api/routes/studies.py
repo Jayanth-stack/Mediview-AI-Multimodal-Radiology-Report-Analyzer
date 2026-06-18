@@ -61,11 +61,7 @@ def get_study(
         out_findings.append(FindingOut(id=f.id, label=f.label, confidence=f.confidence, bbox=bbox))
         
     try:
-        image_url = s3._client.generate_presigned_url(
-            "get_object", 
-            Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, 
-            ExpiresIn=3600
-        )
+        image_url = s3.generate_presigned_get(study.image_s3_key)
     except Exception as e:
         print(f"Error generating presigned url: {e}")
         image_url = ""
