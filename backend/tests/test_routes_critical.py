@@ -5,9 +5,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -198,6 +199,25 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_routes_require_authentication(self):
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(knowledge.router)
+        client = TestClient(app)
+
+        protected_requests = [
+            ("get", "/api/knowledge/documents"),
+            ("get", "/api/knowledge/search?query=pneumonia"),
+            ("post", "/api/knowledge/documents"),
+            ("delete", "/api/knowledge/documents/1"),
+        ]
+
+        for method, path in protected_requests:
+            with self.subTest(method=method, path=path):
+                response = getattr(client, method)(path)
+                self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":
