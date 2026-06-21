@@ -172,8 +172,8 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = Mock()
+            fake_s3.generate_presigned_get.return_value = "https://signed.example/study-view"
 
             out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
         finally:
@@ -183,6 +183,7 @@ class CriticalRouteTests(unittest.TestCase):
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
         self.assertEqual(out.image_url, "https://signed.example/study-view")
+        fake_s3.generate_presigned_get.assert_called_once_with("uploads/xray.png")
         self.assertEqual(len(out.findings), 1)
         self.assertEqual(out.findings[0].label, "right lower lobe opacity")
         self.assertEqual(out.findings[0].bbox.x, 100)
