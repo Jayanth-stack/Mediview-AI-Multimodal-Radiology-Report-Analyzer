@@ -32,13 +32,19 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         job = session.get(Job, job_id)
         if not job:
             return
+        effective_s3_key = job.s3_key or s3_key
         job.status = "running"
         job.progress = 5
         session.commit()
         publish({"status": job.status, "progress": job.progress, "step": "started"})
 
         # Create a Study row for this upload
-        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key)
+        study = Study(
+            user_id=job.user_id,
+            patient_id="unknown",
+            modality="unknown",
+            image_s3_key=effective_s3_key,
+        )
         session.add(study)
         session.commit()
         session.refresh(study)
@@ -46,8 +52,8 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
 
         # Load image bytes from object storage
         s3 = get_s3_storage()
-        image_bytes = s3.get_object_bytes(s3_key)
-        mime, _ = mimetypes.guess_type(s3_key)
+        image_bytes = s3.get_object_bytes(effective_s3_key)
+        mime, _ = mimetypes.guess_type(effective_s3_key)
         mime = mime or "image/png"
         publish({"status": job.status, "progress": 20, "step": "image_loaded"})
 
@@ -83,7 +89,7 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         job.status = "completed"
         job.result = {
             "study_id": study.id,
-            "s3_key": s3_key,
+            "s3_key": effective_s3_key,
             "summary": summary,
             "findings": findings,
         }
