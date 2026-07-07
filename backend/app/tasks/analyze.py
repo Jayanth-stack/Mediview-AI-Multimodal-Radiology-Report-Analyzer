@@ -13,6 +13,19 @@ import redis as redis_sync  # type: ignore
 import json
 
 
+def _finding_to_dict(finding) -> dict:
+    if isinstance(finding, dict):
+        return finding
+    if hasattr(finding, "model_dump"):
+        return finding.model_dump(exclude_none=True)
+    if hasattr(finding, "dict"):
+        return finding.dict(exclude_none=True)
+    return {
+        "label": getattr(finding, "label", ""),
+        "confidence": getattr(finding, "confidence", 0.0),
+    }
+
+
 @celery_app.task(name="analyze_task")
 def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) -> None:
     session = get_session()
@@ -57,9 +70,15 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         try:
             gemini = get_gemini_service()
             publish({"status": job.status, "progress": 30, "step": "gemini_call"})
-            out = gemini.analyze(img_bytes=image_bytes, mime_type=mime, report_text=report_text)
-            findings = list(out.get("findings", [])) if isinstance(out.get("findings"), list) else []
-            summary = str(out.get("summary", "")).strip()
+            out = gemini.analyze_bytes(image_bytes=image_bytes, mime_type=mime, report_text=report_text)
+            raw_findings = getattr(out, "findings", None)
+            if raw_findings is None and isinstance(out, dict):
+                raw_findings = out.get("findings")
+            findings = [_finding_to_dict(f) for f in raw_findings] if isinstance(raw_findings, list) else []
+            summary_value = getattr(out, "summary", None)
+            if summary_value is None and isinstance(out, dict):
+                summary_value = out.get("summary", "")
+            summary = str(summary_value or "").strip()
             publish({"status": job.status, "progress": 80, "step": "gemini_done"})
         except Exception:
             # Fallback stub if Gemini not configured/available

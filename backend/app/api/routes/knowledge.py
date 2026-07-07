@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api import deps
 from app.db.session import get_db
 from app.services.vector_store import get_vector_store, VectorStore
 
 
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/api/knowledge", tags=["knowledge"], dependencies=[Depends(deps.get_current_user)])
 
 
 # Request/Response schemas
