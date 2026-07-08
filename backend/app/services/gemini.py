@@ -40,7 +40,22 @@ class GeminiService:
         patient_context: Optional[str],
     ) -> AnalysisResponse:
         image_bytes = await image.read()
-        
+
+        return self.analyze_bytes(
+            image_bytes=image_bytes,
+            report_text=report_text,
+            patient_context=patient_context,
+        )
+
+    def analyze_bytes(
+        self,
+        image_bytes: bytes,
+        report_text: Optional[str] = None,
+        patient_context: Optional[str] = None,
+        mime_type: Optional[str] = None,
+    ) -> AnalysisResponse:
+        _ = patient_context, mime_type
+
         if not self._enabled:
             return AnalysisResponse(
                 summary="No Gemini API key configured; returning stubbed summary.",
