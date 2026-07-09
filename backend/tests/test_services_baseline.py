@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import io
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -46,6 +48,29 @@ class StorageServiceTests(unittest.TestCase):
 
         self.assertEqual(out, "https://signed.example/upload")
         public_client.generate_presigned_url.assert_called_once()
+
+    def test_generate_presigned_get_uses_public_client(self):
+        internal_client = Mock()
+        public_client = Mock()
+        public_client.generate_presigned_url.return_value = "https://signed.example/study"
+
+        with patch(
+            "app.services.storage.boto3.client",
+            side_effect=[internal_client, public_client],
+        ):
+            storage = S3Storage()
+            out = storage.generate_presigned_get(
+                key="uploads/case-1.png",
+                expires_seconds=600,
+            )
+
+        self.assertEqual(out, "https://signed.example/study")
+        public_client.generate_presigned_url.assert_called_once_with(
+            ClientMethod="get_object",
+            Params={"Bucket": storage._bucket, "Key": "uploads/case-1.png"},
+            ExpiresIn=600,
+        )
+        internal_client.generate_presigned_url.assert_not_called()
 
     def test_get_object_bytes_reads_and_closes_stream(self):
         internal_client = Mock()
@@ -196,6 +221,37 @@ class EmbeddingsServiceTests(unittest.TestCase):
         self.assertEqual(service.embed_text("hello world"), [])
         self.assertEqual(service.embed_query("hello"), [])
         self.assertEqual(service.embed_batch(["a", "b"]), [])
+
+
+class AlembicMigrationTests(unittest.TestCase):
+    def test_migration_revisions_form_single_chain(self):
+        versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+        revisions = {}
+        down_revisions = {}
+
+        for path in versions_dir.glob("*.py"):
+            spec = importlib.util.spec_from_file_location(path.stem, path)
+            self.assertIsNotNone(spec)
+            self.assertIsNotNone(spec.loader)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            revision = module.revision
+            down_revision = module.down_revision
+            revisions[revision] = path.name
+            if isinstance(down_revision, (tuple, list)):
+                down_revisions[revision] = set(down_revision)
+            elif down_revision is None:
+                down_revisions[revision] = set()
+            else:
+                down_revisions[revision] = {down_revision}
+
+        referenced = set().union(*down_revisions.values())
+        missing = referenced - set(revisions)
+        heads = set(revisions) - referenced
+
+        self.assertEqual(missing, set())
+        self.assertEqual(heads, {"0004_add_documents_table"})
 
 
 class HFServiceTests(unittest.TestCase):
