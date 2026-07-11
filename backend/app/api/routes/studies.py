@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from typing import Optional
 
 from app.db.session import get_session
 from app.db.models import Study, Finding, Report, User
@@ -25,8 +26,6 @@ class FindingOut(BaseModel):
     bbox: Bbox
 
 
-from typing import Optional
-
 class StudyOut(BaseModel):
     id: int
     image_url: str
@@ -34,6 +33,10 @@ class StudyOut(BaseModel):
     patient_id: str
     modality: str
     created_at: Optional[str]
+
+
+def _can_access_study(study: Study, user: User) -> bool:
+    return user.is_superuser or study.user_id == user.id
 
 
 @router.get("/{study_id}", response_model=StudyOut)
@@ -44,7 +47,7 @@ def get_study(
     current_user: User = Depends(deps.get_current_user),
 ):
     study = session.get(Study, study_id)
-    if not study:
+    if not study or not _can_access_study(study, current_user):
         raise HTTPException(status_code=404, detail="study not found")
         
     findings = (
@@ -61,11 +64,7 @@ def get_study(
         out_findings.append(FindingOut(id=f.id, label=f.label, confidence=f.confidence, bbox=bbox))
         
     try:
-        image_url = s3._client.generate_presigned_url(
-            "get_object", 
-            Params={"Bucket": s3._bucket, "Key": study.image_s3_key}, 
-            ExpiresIn=3600
-        )
+        image_url = s3.generate_presigned_get(study.image_s3_key)
     except Exception as e:
         print(f"Error generating presigned url: {e}")
         image_url = ""
