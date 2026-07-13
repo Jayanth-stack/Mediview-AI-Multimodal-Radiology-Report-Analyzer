@@ -35,6 +35,8 @@ def get_job(
         job = session.get(Job, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
+        if job.user_id != current_user.id and not current_user.is_superuser:
+            raise HTTPException(status_code=404, detail="job not found")
         return JobStatus(
             id=job.id,
             status=job.status,
@@ -64,6 +66,20 @@ async def job_events(
     except (JWTError, Exception):
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    try:
+        current_user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    session = get_session()
+    try:
+        current_user = session.get(User, current_user_id)
+        if not current_user or not current_user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        is_superuser = current_user.is_superuser
+    finally:
+        session.close()
+
     async def event_gen():
         last_progress = -1
         last_status = None
@@ -73,7 +89,7 @@ async def job_events(
             session = get_session()
             try:
                 job = session.get(Job, job_id)
-                if not job:
+                if not job or (job.user_id != current_user_id and not is_superuser):
                     yield {"event": "error", "data": json.dumps({"error": "not_found"})}
                     break
                 if job.progress != last_progress or job.status != last_status:
