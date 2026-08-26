@@ -32,13 +32,19 @@ def analyze_task(job_id: str, s3_key: str, report_text: Optional[str] = None) ->
         job = session.get(Job, job_id)
         if not job:
             return
+        s3_key = job.s3_key or s3_key
         job.status = "running"
         job.progress = 5
         session.commit()
         publish({"status": job.status, "progress": job.progress, "step": "started"})
 
         # Create a Study row for this upload
-        study = Study(patient_id="unknown", modality="unknown", image_s3_key=s3_key)
+        study = Study(
+            user_id=job.user_id,
+            patient_id="unknown",
+            modality="unknown",
+            image_s3_key=s3_key,
+        )
         session.add(study)
         session.commit()
         session.refresh(study)

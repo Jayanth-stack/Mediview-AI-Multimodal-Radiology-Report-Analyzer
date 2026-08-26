@@ -4,10 +4,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -70,12 +71,12 @@ class CriticalRouteTests(unittest.TestCase):
         fake_s3.generate_presigned_put.return_value = "https://signed.example/upload-put"
         body = uploads.PresignRequest(filename="xray.png", content_type="image/png", use_post=False)
 
-        out = uploads.presign(body=body, s3=fake_s3, current_user=object())
+        out = uploads.presign(body=body, s3=fake_s3, current_user=SimpleNamespace(id=7))
 
         self.assertEqual(out.method, "PUT")
         self.assertEqual(out.url, "https://signed.example/upload-put")
         self.assertIsNone(out.fields)
-        self.assertTrue(out.key.startswith("uploads/"))
+        self.assertTrue(out.key.startswith("users/7/uploads/"))
         self.assertTrue(out.key.endswith("-xray.png"))
 
     def test_uploads_presign_post(self):
@@ -86,25 +87,26 @@ class CriticalRouteTests(unittest.TestCase):
         }
         body = uploads.PresignRequest(filename="xray.png", content_type="image/png", use_post=True)
 
-        out = uploads.presign(body=body, s3=fake_s3, current_user=object())
+        out = uploads.presign(body=body, s3=fake_s3, current_user=SimpleNamespace(id=7))
 
         self.assertEqual(out.method, "POST")
         self.assertEqual(out.url, "https://signed.example/upload-post")
         self.assertEqual(out.fields, {"key": "value"})
-        self.assertTrue(out.key.startswith("uploads/"))
+        self.assertTrue(out.key.startswith("users/7/uploads/"))
         self.assertTrue(out.key.endswith("-xray.png"))
 
     def test_analyze_start_creates_job_and_dispatches_task(self):
+        current_user = SimpleNamespace(id=7)
         with (
             patch("app.api.routes.analyze_job.get_session", side_effect=self.SessionLocal),
             patch("app.api.routes.analyze_job.analyze_task.delay") as mock_delay,
         ):
             out = analyze_job.start_analyze(
                 body=analyze_job.StartAnalyzeRequest(
-                    s3_key="uploads/study-1.png",
+                    s3_key="users/7/uploads/study-1.png",
                     report_text="patient with cough",
                 ),
-                current_user=object(),
+                current_user=current_user,
             )
 
         session = self.SessionLocal()
@@ -113,22 +115,42 @@ class CriticalRouteTests(unittest.TestCase):
             self.assertIsNotNone(job)
             self.assertEqual(job.status, "queued")
             self.assertEqual(job.progress, 0)
-            self.assertEqual(job.s3_key, "uploads/study-1.png")
+            self.assertEqual(job.user_id, current_user.id)
+            self.assertEqual(job.s3_key, "users/7/uploads/study-1.png")
         finally:
             session.close()
 
         mock_delay.assert_called_once_with(
             job_id=out.job_id,
-            s3_key="uploads/study-1.png",
+            s3_key="users/7/uploads/study-1.png",
             report_text="patient with cough",
         )
 
+    def test_analyze_start_rejects_upload_key_from_another_user(self):
+        with (
+            patch("app.api.routes.analyze_job.get_session", side_effect=self.SessionLocal),
+            patch("app.api.routes.analyze_job.analyze_task.delay") as mock_delay,
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                analyze_job.start_analyze(
+                    body=analyze_job.StartAnalyzeRequest(
+                        s3_key="users/99/uploads/study-1.png",
+                        report_text=None,
+                    ),
+                    current_user=SimpleNamespace(id=7),
+                )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        mock_delay.assert_not_called()
+
     def test_jobs_get_job_returns_status(self):
+        user = self._create_user()
         session = self.SessionLocal()
         try:
             session.add(
                 Job(
                     id="job-1",
+                    user_id=user.id,
                     type="analyze",
                     status="running",
                     progress=40,
@@ -141,26 +163,58 @@ class CriticalRouteTests(unittest.TestCase):
             session.close()
 
         with patch("app.api.routes.jobs.get_session", side_effect=self.SessionLocal):
-            out = jobs.get_job(job_id="job-1", current_user=object())
+            out = jobs.get_job(job_id="job-1", current_user=user)
 
         self.assertEqual(out.id, "job-1")
         self.assertEqual(out.status, "running")
         self.assertEqual(out.progress, 40)
         self.assertEqual(out.result, {"hello": "world"})
 
+    def test_jobs_get_job_hides_foreign_jobs(self):
+        owner = self._create_user(email="owner@example.com")
+        other = self._create_user(email="other@example.com")
+        session = self.SessionLocal()
+        try:
+            session.add(
+                Job(
+                    id="job-owned",
+                    user_id=owner.id,
+                    type="analyze",
+                    status="completed",
+                    progress=100,
+                    s3_key="users/1/uploads/study-1.png",
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+        with patch("app.api.routes.jobs.get_session", side_effect=self.SessionLocal):
+            with self.assertRaises(HTTPException) as ctx:
+                jobs.get_job(job_id="job-owned", current_user=other)
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
     def test_jobs_get_job_not_found(self):
         with patch("app.api.routes.jobs.get_session", side_effect=self.SessionLocal):
             with self.assertRaises(HTTPException) as ctx:
-                jobs.get_job(job_id="missing-job", current_user=object())
+                jobs.get_job(job_id="missing-job", current_user=SimpleNamespace(id=7, is_superuser=False))
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_studies_get_study_maps_findings_and_signed_url(self):
+        user = self._create_user()
         session = self.SessionLocal()
         try:
-            study = Study(patient_id="P-001", modality="XR", image_s3_key="uploads/xray.png")
+            study = Study(
+                user_id=user.id,
+                patient_id="P-001",
+                modality="XR",
+                image_s3_key="users/7/uploads/xray.png",
+            )
             session.add(study)
             session.commit()
             session.refresh(study)
+            study_id = study.id
             session.add(
                 Finding(
                     study_id=study.id,
@@ -172,32 +226,68 @@ class CriticalRouteTests(unittest.TestCase):
             )
             session.commit()
 
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
-            fake_s3._client.generate_presigned_url.return_value = "https://signed.example/study-view"
+            fake_s3 = Mock()
+            fake_s3.generate_presigned_get.return_value = "https://signed.example/study-view"
 
-            out = studies.get_study(study_id=study.id, session=session, s3=fake_s3, current_user=object())
+            out = studies.get_study(study_id=study_id, session=session, s3=fake_s3, current_user=user)
         finally:
             session.close()
 
-        self.assertEqual(out.id, study.id)
+        self.assertEqual(out.id, study_id)
         self.assertEqual(out.patient_id, "P-001")
         self.assertEqual(out.modality, "XR")
         self.assertEqual(out.image_url, "https://signed.example/study-view")
         self.assertEqual(len(out.findings), 1)
         self.assertEqual(out.findings[0].label, "right lower lobe opacity")
         self.assertEqual(out.findings[0].bbox.x, 100)
+        fake_s3.generate_presigned_get.assert_called_once_with("users/7/uploads/xray.png")
+
+    def test_studies_get_study_hides_foreign_studies(self):
+        owner = self._create_user(email="study-owner@example.com")
+        other = self._create_user(email="study-other@example.com")
+        session = self.SessionLocal()
+        try:
+            study = Study(
+                user_id=owner.id,
+                patient_id="P-001",
+                modality="XR",
+                image_s3_key="users/1/uploads/xray.png",
+            )
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            with self.assertRaises(HTTPException) as ctx:
+                studies.get_study(study_id=study.id, session=session, s3=Mock(), current_user=other)
+        finally:
+            session.close()
+
+        self.assertEqual(ctx.exception.status_code, 404)
 
     def test_studies_get_study_not_found(self):
         session = self.SessionLocal()
         try:
-            fake_s3 = SimpleNamespace(_client=Mock(), _bucket="mediview")
+            fake_s3 = Mock()
             with self.assertRaises(HTTPException) as ctx:
-                studies.get_study(study_id=9999, session=session, s3=fake_s3, current_user=object())
+                studies.get_study(
+                    study_id=9999,
+                    session=session,
+                    s3=fake_s3,
+                    current_user=SimpleNamespace(id=7, is_superuser=False),
+                )
         finally:
             session.close()
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_routes_require_authentication(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+
+        response = TestClient(app).get("/api/knowledge/stats")
+
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":
