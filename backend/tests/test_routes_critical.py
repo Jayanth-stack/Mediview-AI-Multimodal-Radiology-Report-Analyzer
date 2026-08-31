@@ -4,10 +4,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.api.routes import analyze_job, jobs, login, studies, uploads
+from app.api.routes import analyze_job, jobs, knowledge, login, studies, uploads
 from app.core import security
 from app.core.config import settings
 from app.db.models import Finding, Job, Study, User
@@ -198,6 +199,15 @@ class CriticalRouteTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "study not found")
+
+    def test_knowledge_delete_requires_authentication(self):
+        app = FastAPI()
+        app.include_router(knowledge.router)
+
+        response = TestClient(app).delete("/api/knowledge/documents/1")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Not authenticated")
 
 
 if __name__ == "__main__":
