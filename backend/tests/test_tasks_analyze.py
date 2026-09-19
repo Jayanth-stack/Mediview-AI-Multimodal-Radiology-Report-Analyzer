@@ -22,7 +22,7 @@ class _FakeS3:
 
 
 class _FakeGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         return {
             "findings": [
                 {"label": "left basilar opacity", "confidence": 0.91},
@@ -32,7 +32,7 @@ class _FakeGemini:
 
 
 class _FailingGemini:
-    def analyze(self, **kwargs):
+    def analyze_bytes(self, **kwargs):
         raise RuntimeError("Gemini unavailable")
 
 
@@ -43,10 +43,19 @@ class AnalyzeTaskTests(unittest.TestCase):
     def tearDown(self):
         self.engine.dispose()
 
-    def _seed_job(self, job_id: str):
+    def _seed_job(self, job_id: str, user_id: int = 7):
         session = self.SessionLocal()
         try:
-            session.add(Job(id=job_id, type="analyze", status="queued", progress=0, s3_key="uploads/a.png"))
+            session.add(
+                Job(
+                    id=job_id,
+                    user_id=user_id,
+                    type="analyze",
+                    status="queued",
+                    progress=0,
+                    s3_key=f"users/{user_id}/uploads/a.png",
+                )
+            )
             session.commit()
         finally:
             session.close()
@@ -63,7 +72,7 @@ class AnalyzeTaskTests(unittest.TestCase):
         ):
             analyze_module.analyze_task.run(
                 job_id="job-success",
-                s3_key="uploads/a.png",
+                s3_key="users/7/uploads/a.png",
                 report_text="short history",
             )
 
@@ -74,11 +83,12 @@ class AnalyzeTaskTests(unittest.TestCase):
             self.assertEqual(job.status, "completed")
             self.assertEqual(job.progress, 100)
             self.assertEqual(job.result["summary"], "Opacity at left base.")
-            self.assertEqual(job.result["s3_key"], "uploads/a.png")
+            self.assertEqual(job.result["s3_key"], "users/7/uploads/a.png")
 
             studies = session.query(Study).all()
             findings = session.query(Finding).all()
             self.assertEqual(len(studies), 1)
+            self.assertEqual(studies[0].user_id, 7)
             self.assertEqual(len(findings), 1)
             self.assertEqual(findings[0].label, "left basilar opacity")
         finally:
@@ -97,7 +107,7 @@ class AnalyzeTaskTests(unittest.TestCase):
         ):
             analyze_module.analyze_task.run(
                 job_id="job-fallback",
-                s3_key="uploads/b.png",
+                s3_key="users/7/uploads/b.png",
                 report_text=None,
             )
 
@@ -109,7 +119,7 @@ class AnalyzeTaskTests(unittest.TestCase):
             self.assertEqual(job.progress, 100)
             self.assertEqual(job.result["summary"], "Automated analysis complete (stub).")
             self.assertEqual(job.result["findings"][0]["label"], "possible_abnormality")
-            self.assertEqual(job.result["s3_key"], "uploads/b.png")
+            self.assertEqual(job.result["s3_key"], "users/7/uploads/b.png")
         finally:
             session.close()
 
@@ -121,7 +131,7 @@ class AnalyzeTaskTests(unittest.TestCase):
         ):
             analyze_module.analyze_task.run(
                 job_id="does-not-exist",
-                s3_key="uploads/missing.png",
+                s3_key="users/7/uploads/missing.png",
                 report_text=None,
             )
 

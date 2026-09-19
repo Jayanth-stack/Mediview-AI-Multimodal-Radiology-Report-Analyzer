@@ -21,4 +21,5 @@ celery_app.conf.task_queues = [
 celery_app.conf.task_default_queue = "analyze"
 celery_app.conf.task_default_exchange = "analyze"
 celery_app.conf.task_default_routing_key = "analyze"
+celery_app.conf.imports = ("app.tasks.analyze",)
 

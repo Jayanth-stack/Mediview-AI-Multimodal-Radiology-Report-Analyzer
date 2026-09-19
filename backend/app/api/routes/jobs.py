@@ -25,6 +25,10 @@ class JobStatus(BaseModel):
     result: Optional[dict] = None
 
 
+def _can_access_job(job: Job, user: User) -> bool:
+    return bool(user.is_superuser or job.user_id == user.id)
+
+
 @router.get("/{job_id}", response_model=JobStatus)
 def get_job(
     job_id: str,
@@ -33,7 +37,7 @@ def get_job(
     session = get_session()
     try:
         job = session.get(Job, job_id)
-        if not job:
+        if not job or not _can_access_job(job, current_user):
             raise HTTPException(status_code=404, detail="job not found")
         return JobStatus(
             id=job.id,
@@ -56,13 +60,23 @@ async def job_events(
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    user_id: int
+    is_superuser: bool
+    session = get_session()
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
+        user_id_raw = payload.get("sub")
+        if not user_id_raw:
             raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = int(user_id_raw)
+        user = session.get(User, user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        is_superuser = bool(user.is_superuser)
     except (JWTError, Exception):
         raise HTTPException(status_code=401, detail="Invalid token")
+    finally:
+        session.close()
 
     async def event_gen():
         last_progress = -1
@@ -73,7 +87,7 @@ async def job_events(
             session = get_session()
             try:
                 job = session.get(Job, job_id)
-                if not job:
+                if not job or (job.user_id != user_id and not is_superuser):
                     yield {"event": "error", "data": json.dumps({"error": "not_found"})}
                     break
                 if job.progress != last_progress or job.status != last_status:
