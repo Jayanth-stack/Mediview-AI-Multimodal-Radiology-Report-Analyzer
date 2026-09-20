@@ -1,4 +1,4 @@
-from typing import Generator, Annotated
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -7,7 +7,6 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core import security
 from app.db.models import User
 from app.db.session import get_db
 

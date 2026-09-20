@@ -24,6 +24,7 @@ interface StudyData {
       height: number;
     };
   }>;
+  findings: any[];
   patient_id?: string;
   modality?: string;
   created_at?: string | null;
@@ -211,6 +212,7 @@ export default function Home() {
                   imageSrc={studyData.image_url}
                   findings={studyData.findings}
                 />
+                <StudyViewer imageSrc={studyData.image_url} findings={studyData.findings} />
               </div>
             </motion.div>
           )}
