@@ -10,7 +10,6 @@ from typing import Annotated, Optional
 from app.db.session import get_session
 from app.db.models import Job, User
 from app.api import deps
-from app.core import security
 from app.core.config import settings
 from jose import jwt, JWTError
 
@@ -32,7 +31,11 @@ def get_job(
 ) -> JobStatus:
     session = get_session()
     try:
-        job = session.get(Job, job_id)
+        job = (
+            session.query(Job)
+            .filter(Job.id == job_id, Job.user_id == current_user.id)
+            .first()
+        )
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
         return JobStatus(
@@ -58,11 +61,19 @@ async def job_events(
     
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = payload.get("sub")
+        user_id = int(payload.get("sub"))
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except (JWTError, Exception):
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    session = get_session()
+    try:
+        user = session.get(User, user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    finally:
+        session.close()
 
     async def event_gen():
         last_progress = -1
@@ -72,7 +83,11 @@ async def job_events(
                 break
             session = get_session()
             try:
-                job = session.get(Job, job_id)
+                job = (
+                    session.query(Job)
+                    .filter(Job.id == job_id, Job.user_id == user_id)
+                    .first()
+                )
                 if not job:
                     yield {"event": "error", "data": json.dumps({"error": "not_found"})}
                     break

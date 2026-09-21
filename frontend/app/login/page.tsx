@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { setToken } from "../../utils/auth";
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -23,7 +25,7 @@ export default function LoginPage() {
             formData.append("username", email);
             formData.append("password", password);
 
-            const res = await fetch("http://localhost:8000/api/login/access-token", {
+            const res = await fetch(`${backendUrl}/api/login/access-token`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",

@@ -13,6 +13,17 @@ type View = "landing" | "upload" | "viewer";
 interface StudyData {
   id: number;
   image_url: string;
+  findings: Array<{
+    id: number;
+    label: string;
+    confidence: number;
+    bbox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+  }>;
   findings: any[];
   patient_id?: string;
   modality?: string;
@@ -197,6 +208,10 @@ export default function Home() {
                     Back to Home
                   </button>
                 </div>
+                <StudyViewer
+                  imageSrc={studyData.image_url}
+                  findings={studyData.findings}
+                />
                 <StudyViewer imageSrc={studyData.image_url} findings={studyData.findings} />
               </div>
             </motion.div>

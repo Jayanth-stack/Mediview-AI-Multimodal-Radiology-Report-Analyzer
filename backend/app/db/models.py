@@ -26,6 +26,7 @@ class Study(Base):
     __tablename__ = "studies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     patient_id: Mapped[str] = mapped_column(String(64), index=True)
     modality: Mapped[str] = mapped_column(String(32))
     image_s3_key: Mapped[str] = mapped_column(String(256))
@@ -74,6 +75,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     type: Mapped[str] = mapped_column(String(32), default="analyze")
     status: Mapped[str] = mapped_column(String(16), default=JobStatusEnum.queued.value)
     progress: Mapped[int] = mapped_column(Integer, default=0)
